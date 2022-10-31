@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS commits
     organisation text NOT NULL,
     branch text NOT NULL,
     commit_date Timestamptz,
+    message text,
     UNIQUE (commit_hash)
 );
 
@@ -74,22 +75,6 @@ CREATE TABLE IF NOT EXISTS prs
     updated_at Timestamptz,
     closed_at Timestamptz,
     merged_at Timestamptz,
-    repo text NOT NULL,
-    organisation text NOT NULL,
-    dev_name text NOT NULL,
-    UNIQUE (id)
-);
-
-CREATE TABLE IF NOT EXISTS issues
-(
-    id int NOT NULL,
-    issue_number int NOT NULL,
-    title text NOT NULL,
-    html_url text NOT NULL,
-    issue_state text NOT NULL,
-    created_at Timestamptz,
-    updated_at Timestamptz,
-    closed_at Timestamptz,
     repo text NOT NULL,
     organisation text NOT NULL,
     dev_name text NOT NULL,
