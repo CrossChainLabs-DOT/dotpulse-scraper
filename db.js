@@ -1,3 +1,5 @@
+/** @module DB **/
+
 const { Pool } = require("pg");
 const config = require('./config');
 const { WARNING } = require('./logs');
@@ -22,12 +24,18 @@ function FormatText(t) {
     return t.replace(/'/g, "''");
 }
 
+/** Class that contains the database wrapper implementation. */
 class DB {
 
     constructor() {
         this.pool = new Pool(config.database);
     }
 
+    /**
+     * Run an query.
+     * @param {string} query - The query.
+     * @param {string} log - The log.
+    */
     async Query(query, log) {
         let result = undefined;
         try {
@@ -39,6 +47,10 @@ class DB {
         return result;
     }
 
+    /**
+     * Refresh an materialized view.
+     * @param {string} view - The name view.
+    */
     async RefreshView(view) {
         try {
             await this.pool.query(
@@ -49,6 +61,10 @@ class DB {
         }
     }
 
+    /**
+     * Save the list of repos
+     * @param {object} repos - The list of repos.
+    */
     async SaveRepos(repos) {
         for (let i = 0; i < repos.length; i++) {
             try {
@@ -69,6 +85,10 @@ class DB {
         }
     }
 
+    /**
+     * Save the repo info
+     * @param {object} repo - The repo info.
+    */
     async SaveRepoInfo(repo) {
         try {
             let values = `'${repo.repo}', \
@@ -96,6 +116,10 @@ class DB {
         }
     }
 
+    /**
+     * Save the branch info
+     * @param {object} branch - The branch info.
+    */
     async SaveBranch(branch) {
         try {
             let values = `'${branch.repo}', \
@@ -115,6 +139,10 @@ class DB {
         }
     }
 
+    /**
+     * Save the list of devs
+     * @param {object} devs - The list of devs.
+    */
     async SaveDevs(devs) {
         let query = '';
         
@@ -140,6 +168,10 @@ class DB {
         await this.Query(query,'SaveDevs');
     }
 
+    /**
+     * Save the list of contributions of the devs
+     * @param {object} devs - The list of devs with contributions.
+    */
     async SaveContributions(devs) {
         let query = '';
 
@@ -167,6 +199,10 @@ class DB {
         await this.Query(query, 'SaveContributions');
     }
 
+    /**
+     * Save the list of commits
+     * @param {object} commits - The list of commits.
+    */
     async SaveCommits(commits) {
         let query = '';
 
@@ -195,6 +231,10 @@ class DB {
         await this.Query(query, 'SaveCommits');
     }
 
+    /**
+     * Save the list of prs
+     * @param {object} prs - The list of prs.
+    */
     async SavePRs(prs) {
         let query = '';
 
@@ -233,6 +273,10 @@ class DB {
         await this.Query(query, 'SavePRs');
     }
 
+    /**
+     * Save the list of issues
+     * @param {object} issues - The list of issues.
+    */
     async SaveIssues(issues) {
         let query = '';
         

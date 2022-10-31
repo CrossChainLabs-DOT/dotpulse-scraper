@@ -1,3 +1,5 @@
+/** @module SCRAPER **/
+
 const config = require('./config');
 const axios = require('axios');
 const cliProgress = require('cli-progress');
@@ -15,7 +17,13 @@ const blacklisted_repos = config.scraper.blacklisted_repos;
 const whitelisted_organizations = config.scraper.whitelisted_organizations;
 const whitelisted_repos = config.scraper.whitelisted_repos;
 
+/** Class that contains the scraper implementation. */
 class Scraper {
+    /**
+     * Initialize the scraper instance.
+     * @param {string} api - The Github API.
+     * @param {string} token_list - The list of Github tokens.
+     */
     constructor(api, token_list) {
         this.api = api;
         this.token_list = token_list;
@@ -41,6 +49,9 @@ class Scraper {
         return result;
     }
 
+    /**
+     * Get the next available token from the token_list.
+    */
     GetNextToken() {
         if (this.token_list_index < this.token_list.length - 1) {
             this.token_list_index++;
@@ -53,6 +64,12 @@ class Scraper {
         this.token = this.token_list[this.token_list_index];
     }
 
+    /**
+     * Make an get request to the Github API.
+     * @param {string} url - The Github API URL.
+     * @param {string} params - The params of the request.
+     * @param {boolean} verbose - Display additional logs.
+    */
     async Get(url, params, verbose = false) {
         let response = undefined;
 
@@ -81,6 +98,9 @@ class Scraper {
         return response;
     }
 
+    /**
+     * Calculate the available requests for the current token.
+    */
     async UpdateRateLimit() {
         if (this.remaining_requests < SCRAPE_LIMIT + 5) {
             this.GetNextToken();
@@ -120,6 +140,12 @@ class Scraper {
         }
     }
 
+    /**
+     * Make an get request to the Github API and update the remaining requests.
+     * @param {string} url - The Github API URL.
+     * @param {string} params - The params of the request.
+     * @param {boolean} verbose - Display additional logs.
+    */
     async GetWithRateLimitCheck(url, params, verbose = false) {
         await this.UpdateRateLimit();
 
@@ -132,6 +158,10 @@ class Scraper {
         return await this.Get(url, params, verbose);
     }
 
+    /**
+     * Get all the list of repos within an organization.
+     * @param {string} org - The name of the organization.
+    */
     async GetOrganizationRepos(org) {
         let result = [];
 
@@ -175,6 +205,11 @@ class Scraper {
         return result;
     }
 
+    /**
+     * Check if an repository should be skiped based on the provided configuration.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     IsBlacklisted(repo, org) {
         let result = false;
 
@@ -193,6 +228,11 @@ class Scraper {
         return result;
     }
 
+    /**
+     * Check if an repository exists.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     async IsValidRepo(repo, org) {
         let result = false;
         let repo_full_name = org + '/' + repo;
@@ -210,6 +250,9 @@ class Scraper {
         return result;
     }
 
+    /**
+     * Generate the list of repositories that should be scraped based on the provided configuration.
+    */
     async GetWhitelistedRepos() {
         let repos = [];
 
@@ -260,6 +303,9 @@ class Scraper {
 
     }
 
+    /**
+     * Generate the list of repositories that should be scraped based on the provided configuration.
+    */
     async GetRepoInfo(repo, org, dependencies, repo_type) {
         let result = undefined;
         let repo_full_name = org + '/' + repo;
@@ -317,6 +363,11 @@ class Scraper {
         INFO(`GetRepoInfo [${org}/${repo}] done (used requests: ${requests})`);
     }
 
+    /**
+     * Get list of contributors of the repository.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     async GetRepoContributors(repo, org) {
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
@@ -370,6 +421,12 @@ class Scraper {
         INFO(`GetRepoContributors [${org}/${repo}] done (used requests: ${requests})`);
     }
 
+    /**
+     * Get list of branches of the repository.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+     * @param {string} default_branch - The default branch of the repository.
+    */
     async GetRepoBranches(repo, org, default_branch) {
         let result = [];
         let repo_full_name = org + '/' + repo;
@@ -420,6 +477,11 @@ class Scraper {
 
     }
 
+    /**
+     * Get list of commits of the repository.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     async GetRepoCommits(repo, org) {
         let commitsSet = new Set();
         let repo_full_name = org + '/' + repo;
@@ -548,6 +610,11 @@ class Scraper {
         INFO(`GetRepoCommits [${org}/${repo}] done (used requests: ${requests})`);
     }
 
+    /**
+     * Get list of PRs of the repository.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     async GetRepoPRs(repo, org) {
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
@@ -605,6 +672,11 @@ class Scraper {
         INFO(`GetRepoPRs [${org}/${repo}] done (used requests: ${requests})`);
     }
 
+    /**
+     * Get list of issues of the repository.
+     * @param {string} repo - The name of the repository.
+     * @param {string} org - The name of the organization.
+    */
     async GetRepoIssues(repo, org) {
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
@@ -675,6 +747,9 @@ class Scraper {
         INFO(`GetRepoIssues [${org}/${repo}] done (used requests: ${requests})`);
     }
 
+    /**
+     * Get list of repositories to be scraped.
+    */
     async GetReposList() {
         let result = [];
         try {
@@ -690,6 +765,9 @@ class Scraper {
         return result;
     }
 
+    /**
+     * Check if there are new changes in an repository since the last scrape.
+    */
     async GetRepoStatus(repo, org) {
         let repo_full_name = org + '/' + repo;
 
@@ -731,36 +809,9 @@ class Scraper {
         return result;
     }
 
-    UpdateDependencies(repo_item, dep) {
-        if (!repo_item || !repo_item.dependencies) {
-            ERROR(`UpdateDependencies: invalid repo item ${repo_item}`);
-            return undefined;
-        }
-
-        let dependencies = repo_item.dependencies;
-
-        let have_dep = false;
-
-        for ( const d of dependencies ) {
-            if (d === dep ) {
-                have_dep = true;
-            }
-        }
-
-        if (!have_dep) {
-            dependencies.push(dep);
-        }
-
-        let updated_repo_item = {
-            repo: repo_item.repo,
-            organisation: repo_item.organisation,
-            repo_type: repo_item.repo_type,
-            dependencies: dependencies,
-        }
-
-        return updated_repo_item;
-    }
-
+    /**
+     * Start the scraping process for all the repos within the repos list.
+    */
     async Run() {
         STATUS('Scraping');
 
@@ -798,16 +849,12 @@ class Scraper {
                 await db.RefreshView('commits_view');
                 await db.RefreshView('active_contributors_view');
                 await db.RefreshView('recent_commits_view');
+                await db.RefreshView('repositories_view');
                 INFO(`Refresh views done`);
             }
         }
 
         STATUS('Scraping completed');
-    }
-
-    async Stop() {
-        INFO('GitHubScraper stopping');
-        this.stop = true;
     }
 }
 

@@ -3,7 +3,8 @@
   "version": "0.0.2",
   "description": "DotPulse Scraper",
   "scripts": {
-    "start": "env-cmd node index.js"
+    "start": "env-cmd node index.js",
+    "docs": "jsdoc2md --template docs-template.hbs --files scraper.js db.js >> docs.md"
   },
   "repository": {
     "type": "git",
@@ -23,5 +24,9 @@
     "pg": "^8.7.1",
     "postgres-migrations": "^5.3.0",
     "time-stamp": "^2.2.0"
+  },
+  "devDependencies": {
+    "jsdoc": "^3.6.11",
+    "jsdoc-to-markdown": "^7.1.1"
   }
 }
