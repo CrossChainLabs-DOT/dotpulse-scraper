@@ -5,3 +5,4 @@ CREATE INDEX IF NOT EXISTS idx_branches ON branches(repo, organisation, branch);
 CREATE INDEX IF NOT EXISTS idx_commits ON commits(commit_hash);
 CREATE INDEX IF NOT EXISTS idx_commits2 ON commits(repo, organisation);
 CREATE INDEX IF NOT EXISTS idx_prs ON prs(id);
+CREATE INDEX IF NOT EXISTS idx_issues ON issues(id);

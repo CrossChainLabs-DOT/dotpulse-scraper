@@ -232,6 +232,42 @@ class DB {
 
         await this.Query(query, 'SavePRs');
     }
+
+    async SaveIssues(issues) {
+        let query = '';
+        
+        for (let i = 0; i < issues.length; i++) {
+            try {
+                let issue = issues[i];
+                let values = `'${issue.id}', \
+                        '${issue.issue_number}',\
+                        '${FormatText(issue.title)}',\
+                        '${issue.html_url}',\
+                        '${issue.issue_state}',\
+                        ${FormatNull(issue.created_at)},\
+                        ${FormatNull(issue.updated_at)},\
+                        ${FormatNull(issue.closed_at)},\
+                        '${issue.repo}',\
+                        '${issue.organisation}',\
+                        '${issue.dev_name}'`;
+
+                query += `\
+                    UPDATE issues SET title='${FormatText(issue.title)}',\
+                                issue_state='${issue.issue_state}', \
+                                updated_at=${FormatNull(issue.updated_at)}, \
+                                closed_at=${FormatNull(issue.closed_at)} \
+                        WHERE id='${issue.id}' AND repo='${issue.repo}' AND organisation='${issue.organisation}'; \
+                    INSERT INTO issues (id, issue_number, title, html_url, issue_state, created_at, updated_at, closed_at, repo, organisation, dev_name) \
+                            SELECT ${values} WHERE NOT EXISTS (SELECT 1 FROM issues WHERE id='${issue.id}' AND repo='${issue.repo}' AND organisation='${issue.organisation}');`;
+                    
+
+            } catch (err) {
+                WARNING(`[SaveIssues] -> ${err}`)
+            }
+        }
+
+         await this.Query(query, 'SaveIssues');
+    }
 }
 
 module.exports = {
