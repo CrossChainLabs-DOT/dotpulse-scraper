@@ -1,7 +1,7 @@
 const timestamp = require('time-stamp');
 
 function INFO(msg) {
-    console.log(timestamp.utc('YYYY/MM/DD-HH:mm:ss:ms'), '\x1b[33m', 'DotPulse', '\x1b[32m', '[ INFO ] ', '\x1b[0m', msg);
+    console.log(timestamp.utc('YYYY/MM/DD-HH:mm:ss:ms'), "\x1b[33m", 'DotPulse', "\x1b[32m", '[ INFO ] ', '\x1b[0m', msg);
 }
 
 function ERROR(msg) {
@@ -13,7 +13,7 @@ function WARNING(msg) {
 }
 
 function STATUS(msg) {
-    console.log(timestamp.utc('YYYY/MM/DD-HH:mm:ss:ms'), '\x1b[33m', 'DotPulse', '\033[34m', '[ STATUS ] ', '\x1b[0m', msg);
+    console.log(timestamp.utc('YYYY/MM/DD-HH:mm:ss:ms'), '\x1b[33m', 'DotPulse', '\u001b[34m', '[ STATUS ] ', '\x1b[0m', msg);
 }
 
 module.exports = {

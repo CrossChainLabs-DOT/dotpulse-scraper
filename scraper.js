@@ -39,16 +39,6 @@ class Scraper {
         }
     }
 
-    GetRecentCommitsDate(date) {
-        let result = date;
-        let recent_commits_date = subDays(new Date(), config.scraper.recent_commits_days);
-        if (compareAsc(recent_commits_date, date) == 1) {
-            result = recent_commits_date;
-        }
-
-        return result;
-    }
-
     /**
      * Get the next available token from the token_list.
     */
@@ -307,6 +297,7 @@ class Scraper {
      * Generate the list of repositories that should be scraped based on the provided configuration.
     */
     async GetRepoInfo(repo, org, dependencies, repo_type) {
+        let saved = false;
         let result = undefined;
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
@@ -353,6 +344,7 @@ class Scraper {
             }
 
             await db.SaveRepoInfo(result);
+            saved = true;
 
         } catch (e) {
             ERROR(`GetRepoInfo: ${e}`);
@@ -361,6 +353,7 @@ class Scraper {
         requests = requests - this.remaining_requests;
 
         INFO(`GetRepoInfo [${org}/${repo}] done (used requests: ${requests})`);
+        return saved;
     }
 
     /**
@@ -369,6 +362,7 @@ class Scraper {
      * @param {string} org - The name of the organization.
     */
     async GetRepoContributors(repo, org) {
+        let contributors = 0;
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
 
@@ -410,6 +404,8 @@ class Scraper {
 
                 await db.SaveDevs(result);
                 await db.SaveContributions(result);
+
+                contributors += respContributors?.data?.length;
             } while (have_items);
 
         } catch (e) {
@@ -419,6 +415,8 @@ class Scraper {
         requests = requests - this.remaining_requests;
 
         INFO(`GetRepoContributors [${org}/${repo}] done (used requests: ${requests})`);
+
+        return contributors;
     }
 
     /**
@@ -483,6 +481,7 @@ class Scraper {
      * @param {string} org - The name of the organization.
     */
     async GetRepoCommits(repo, org) {
+        let commits = 0;
         let commitsSet = new Set();
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
@@ -512,7 +511,8 @@ class Scraper {
     
                         const latest_commit_date_result = await db.Query(`SELECT latest_commit_date FROM branches WHERE repo='${repo}' AND organisation='${org}' AND branch='${branch}';`);
                         if (latest_commit_date_result?.rows[0]?.latest_commit_date) {
-                            since = this.GetRecentCommitsDate(new Date(latest_commit_date_result?.rows[0]?.latest_commit_date)).toISOString();
+                            let latest_commit_date_from_db = new Date(latest_commit_date_result?.rows[0]?.latest_commit_date)
+                            since = latest_commit_date_from_db.toISOString();
                         } else {
                             since = recent_commits_date.toISOString();
                         }
@@ -580,6 +580,7 @@ class Scraper {
                             });
     
                             await db.SaveCommits(result);
+                            commits += result.length;
                         } while (have_items);
     
                         await db.SaveBranch({
@@ -608,6 +609,8 @@ class Scraper {
         requests = requests - this.remaining_requests;
 
         INFO(`GetRepoCommits [${org}/${repo}] done (used requests: ${requests})`);
+
+        return commits;
     }
 
     /**
@@ -616,6 +619,7 @@ class Scraper {
      * @param {string} org - The name of the organization.
     */
     async GetRepoPRs(repo, org) {
+        let prs = 0;
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
 
@@ -661,6 +665,8 @@ class Scraper {
                 });
 
                 await db.SavePRs(result);
+
+                prs += result.length;
             } while (have_items);
 
         } catch (e) {
@@ -670,6 +676,8 @@ class Scraper {
         requests = requests - this.remaining_requests;
 
         INFO(`GetRepoPRs [${org}/${repo}] done (used requests: ${requests})`);
+
+        return prs;
     }
 
     /**
@@ -678,6 +686,7 @@ class Scraper {
      * @param {string} org - The name of the organization.
     */
     async GetRepoIssues(repo, org) {
+        let issues = 0;
         let repo_full_name = org + '/' + repo;
         let requests = this.remaining_requests;
         let since = undefined;
@@ -736,6 +745,8 @@ class Scraper {
                 });
 
                 await db.SaveIssues(result);
+
+                issues += result.length;
             } while (have_items);
 
         } catch (e) {
@@ -745,6 +756,8 @@ class Scraper {
         requests = requests - this.remaining_requests;
 
         INFO(`GetRepoIssues [${org}/${repo}] done (used requests: ${requests})`);
+
+        return issues;
     }
 
     /**

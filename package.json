@@ -4,7 +4,8 @@
   "description": "DotPulse Scraper",
   "scripts": {
     "start": "env-cmd node index.js",
-    "docs": "jsdoc2md --template docs-template.hbs --files scraper.js db.js >> docs.md"
+    "docs": "jsdoc2md --template docs-template.hbs --files scraper.js db.js >> docs.md",
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -18,14 +19,15 @@
   "homepage": "https://github.com/CrossChainLabs-DOT/dotpulse-scraper#readme",
   "dependencies": {
     "axios": "^0.24.0",
-    "env-cmd": "^10.1.0",
     "cli-progress": "^3.11.0",
     "date-fns": "^2.28.0",
+    "env-cmd": "^10.1.0",
     "pg": "^8.7.1",
     "postgres-migrations": "^5.3.0",
     "time-stamp": "^2.2.0"
   },
   "devDependencies": {
+    "jest": "^29.2.2",
     "jsdoc": "^3.6.11",
     "jsdoc-to-markdown": "^7.1.1"
   }

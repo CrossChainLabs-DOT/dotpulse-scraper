@@ -1,0 +1,5 @@
+version: '3'
+services:
+  dotpulse-scraper:
+    restart: always
+    build: .
