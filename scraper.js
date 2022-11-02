@@ -1,11 +1,11 @@
 /** @module SCRAPER **/
 
-const config = require('./config');
-const axios = require('axios');
-const cliProgress = require('cli-progress');
-const { compareAsc, subDays } = require('date-fns');
-const { INFO, ERROR, WARNING, STATUS } = require('./logs');
-const { DB } = require('./db');
+const config = require("./config");
+const axios = require("axios");
+const cliProgress = require("cli-progress");
+const { compareAsc, subDays } = require("date-fns");
+const { INFO, ERROR, WARNING, STATUS } = require("./logs");
+const { DB } = require("./db");
 
 let db = new DB();
 
@@ -19,858 +19,901 @@ const whitelisted_repos = config.scraper.whitelisted_repos;
 
 /** Class that contains the scraper implementation. */
 class Scraper {
-    /**
-     * Initialize the scraper instance.
-     * @param {string} api - The Github API.
-     * @param {string} token_list - The list of Github tokens.
-     */
-    constructor(api, token_list) {
-        this.api = api;
-        this.token_list = token_list;
-        this.token_list_index = 0;
-        
-        this.remaining_requests = 0;
-        this.search_remaining_requests = 0;
-        this.reset_time = 0;
-        this.stop = false;
+  /**
+   * Initialize the scraper instance.
+   * @param {string} api - The Github API.
+   * @param {string} token_list - The list of Github tokens.
+   */
+  constructor(api, token_list) {
+    this.api = api;
+    this.token_list = token_list;
+    this.token_list_index = 0;
 
-        if (token_list?.length) {
-            this.token = token_list[0];
-        }
+    this.remaining_requests = 0;
+    this.search_remaining_requests = 0;
+    this.reset_time = 0;
+    this.stop = false;
+
+    if (token_list?.length) {
+      this.token = token_list[0];
+    }
+  }
+
+  /**
+   * Get the next available token from the token_list.
+   */
+  getNextToken() {
+    if (this.token_list_index < this.token_list.length - 1) {
+      this.token_list_index++;
+    } else {
+      this.token_list_index = 0;
     }
 
-    /**
-     * Get the next available token from the token_list.
-    */
-    GetNextToken() {
-        if (this.token_list_index < this.token_list.length - 1) {
-            this.token_list_index++;
+    INFO(`getNextToken index ${this.token_list_index}`);
+
+    this.token = this.token_list[this.token_list_index];
+  }
+
+  /**
+   * Make an get request to the Github API.
+   * @param {string} url - The Github API URL.
+   * @param {string} params - The params of the request.
+   * @param {boolean} verbose - Display additional logs.
+   */
+  async get(url, params, verbose = false) {
+    let response = undefined;
+
+    try {
+      if (this.token) {
+        response = await axios.get(url, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `token ${this.token}`,
+          },
+          timeout: 10000,
+          params,
+        });
+      } else {
+        response = await axios.get(url, { timeout: 10000, params });
+      }
+
+      if (verbose) {
+        INFO(`get ${url} -> ${JSON.stringify(params)}`);
+      }
+    } catch (e) {
+      ERROR(`get ${url} -> ${JSON.stringify(params)} error: ${e}`);
+    }
+
+    return response;
+  }
+
+  /**
+   * Calculate the available requests for the current token.
+   */
+  async updateRateLimit() {
+    if (this.remaining_requests < SCRAPE_LIMIT + 5) {
+      this.getNextToken();
+      const resp = await this.get(this.api + "rate_limit");
+
+      if (resp?.data?.rate) {
+        const resetTime = new Date(resp?.data?.rate?.reset * 1000);
+        this.remaining_requests = resp?.data?.rate?.remaining;
+        this.reset_time = Math.round(resetTime.getTime() / 1000);
+
+        INFO(`updateRateLimit: remaining_requests ${this.remaining_requests}`);
+      } else {
+        ERROR(`updateRateLimit: get rate limit status ${resp?.status}`);
+      }
+
+      if (this.remaining_requests < SCRAPE_LIMIT + 5) {
+        const now = new Date();
+        const secondsSinceEpoch = Math.round(now.getTime() / 1000);
+
+        const sleep_duration_sec = this.reset_time - secondsSinceEpoch + 1;
+        const pause = (timeout) =>
+          new Promise((res) => setTimeout(res, timeout * 1000));
+
+        INFO(`updateRateLimit: sleep for ${sleep_duration_sec} seconds`);
+        await pause(sleep_duration_sec);
+
+        const resp = await this.get(this.api + "rate_limit");
+
+        if (resp?.data?.rate) {
+          this.remaining_requests = resp?.data?.rate?.remaining;
+          this.reset_time = resp?.data?.rate?.reset;
+
+          INFO(
+            `updateRateLimit: remaining_requests ${this.remaining_requests}`
+          );
         } else {
-            this.token_list_index = 0;
+          ERROR(`UpdateRateLimit: get rate limit status ${resp?.status}`);
         }
+      }
+    }
+  }
 
-        INFO(`GetNextToken index ${this.token_list_index}`);
+  /**
+   * Make an get request to the Github API and update the remaining requests.
+   * @param {string} url - The Github API URL.
+   * @param {string} params - The params of the request.
+   * @param {boolean} verbose - Display additional logs.
+   */
+  async getWithRateLimitCheck(url, params, verbose = false) {
+    await this.updateRateLimit();
 
-        this.token = this.token_list[this.token_list_index];
+    if (this.remaining_requests < 1) {
+      return undefined;
     }
 
-    /**
-     * Make an get request to the Github API.
-     * @param {string} url - The Github API URL.
-     * @param {string} params - The params of the request.
-     * @param {boolean} verbose - Display additional logs.
-    */
-    async Get(url, params, verbose = false) {
-        let response = undefined;
+    this.remaining_requests -= 1;
 
-        try {
-            if (this.token) {
-                response = await axios.get(url, {
-                    headers: {
-                        Accept: 'application/vnd.github.v3+json',
-                        Authorization: `token ${this.token}`,
-                    },
-                    timeout: 10000,
-                    params
-                });
-            } else {
-                response = await axios.get(url, { timeout: 10000, params });
-            }
-    
-            if (verbose) {
-                INFO(`Get ${url} -> ${JSON.stringify(params)}`);
-            }
-            
-        } catch (e) {
-            ERROR(`Get ${url} -> ${JSON.stringify(params)} error: ${e}`);
-        }
+    return await this.get(url, params, verbose);
+  }
 
-        return response;
+  /**
+   * Get all the list of repos within an organization.
+   * @param {string} org - The name of the organization.
+   */
+  async getOrganizationRepos(org) {
+    let result = [];
+
+    if (!org) {
+      return;
     }
 
-    /**
-     * Calculate the available requests for the current token.
-    */
-    async UpdateRateLimit() {
-        if (this.remaining_requests < SCRAPE_LIMIT + 5) {
-            this.GetNextToken();
-            const resp = await this.Get(this.api + 'rate_limit');
+    INFO(`getOrganizationRepos[${org}]`);
 
-            if (resp?.data?.rate) {
-                const resetTime = new Date(resp?.data?.rate?.reset * 1000);
-                this.remaining_requests = resp?.data?.rate?.remaining;
-                this.reset_time =  Math.round(resetTime.getTime() / 1000);
+    try {
+      let have_items = false;
+      let page = 1;
 
-                INFO(`UpdateRateLimit: remaining_requests ${this.remaining_requests}`);
-            } else {
-                ERROR(`UpdateRateLimit: get rate limit status ${resp?.status}`);
-            }
+      do {
+        const respRepos = await this.getWithRateLimitCheck(
+          this.api + "orgs/" + org + "/repos",
+          {
+            per_page: PER_PAGE,
+            page: page,
+          }
+        );
 
-            if (this.remaining_requests < SCRAPE_LIMIT + 5) {
-                const now = new Date()
-                const secondsSinceEpoch = Math.round(now.getTime() / 1000);
-
-                const sleep_duration_sec = this.reset_time - secondsSinceEpoch + 1;
-                const pause = (timeout) => new Promise(res => setTimeout(res, timeout * 1000));
-
-                INFO(`UpdateRateLimit: sleep for ${sleep_duration_sec} seconds`);
-                await pause(sleep_duration_sec);
-
-                const resp = await this.Get(this.api + 'rate_limit');
-
-                if (resp?.data?.rate) {
-                    this.remaining_requests = resp?.data?.rate?.remaining;
-                    this.reset_time = resp?.data?.rate?.reset;
-
-                    INFO(`UpdateRateLimit: remaining_requests ${this.remaining_requests}`);
-                } else {
-                    ERROR(`UpdateRateLimit: get rate limit status ${resp?.status}`);
-                }
-            }
-        }
-    }
-
-    /**
-     * Make an get request to the Github API and update the remaining requests.
-     * @param {string} url - The Github API URL.
-     * @param {string} params - The params of the request.
-     * @param {boolean} verbose - Display additional logs.
-    */
-    async GetWithRateLimitCheck(url, params, verbose = false) {
-        await this.UpdateRateLimit();
-
-        if (this.remaining_requests < 1) {
-            return undefined;
-        }
-
-        this.remaining_requests -= 1;
-
-        return await this.Get(url, params, verbose);
-    }
-
-    /**
-     * Get all the list of repos within an organization.
-     * @param {string} org - The name of the organization.
-    */
-    async GetOrganizationRepos(org) {
-        let result = [];
-
-        if (!org) {
-            return;
-        }
-
-        INFO(`GetOrganizationRepos[${org}]`);
-
-        try {
-            let have_items = false;
-            let page = 1;
-
-            do {
-                
-
-                const respRepos = await this.GetWithRateLimitCheck(
-                    this.api + 'orgs/' + org + '/repos',
-                    {
-                        per_page: PER_PAGE,
-                        page: page,
-                    });
-
-                if (respRepos?.data.length === PER_PAGE) {
-                    have_items = true;
-                    page++;
-                } else {
-                    have_items = false;
-                }
-
-                respRepos?.data.forEach(repo => {
-                    result.push(repo.name);
-                });
-
-            } while (have_items);
-
-        } catch (e) {
-            ERROR(`GetOrganizationRepos: ${e}`);
-        }
-
-        return result;
-    }
-
-    /**
-     * Check if an repository should be skiped based on the provided configuration.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    IsBlacklisted(repo, org) {
-        let result = false;
-
-        if (blacklisted_organizations && blacklisted_organizations.find(o => o == org)) {
-            result = true;
+        if (respRepos?.data.length === PER_PAGE) {
+          have_items = true;
+          page++;
         } else {
-            if (blacklisted_repos && blacklisted_repos.find(r => r == (org + '/' + repo))) {
-                result = true;
-            }
+          have_items = false;
         }
 
-        if (result) {
-            WARNING(`IsBlacklisted: ${org}/${repo}`);
-        }
-
-        return result;
+        respRepos?.data.forEach((repo) => {
+          result.push(repo.name);
+        });
+      } while (have_items);
+    } catch (e) {
+      ERROR(`getOrganizationRepos: ${e}`);
     }
 
-    /**
-     * Check if an repository exists.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    async IsValidRepo(repo, org) {
-        let result = false;
-        let repo_full_name = org + '/' + repo;
+    return result;
+  }
 
-        try {
-            const respGeneralInfo = await this.GetWithRateLimitCheck(this.api + 'repos/' + repo_full_name);
+  /**
+   * Check if an repository should be skiped based on the provided configuration.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  isBlacklisted(repo, org) {
+    let result = false;
 
-            if (respGeneralInfo?.data?.id) {
-                result = true;
-            }
-        } catch (e) {
-            ERROR(`IsValidRepo: ${repo_full_name} -> ${e}`);
-        }
-
-        return result;
+    if (
+      blacklisted_organizations &&
+      blacklisted_organizations.find((o) => o == org)
+    ) {
+      result = true;
+    } else {
+      if (
+        blacklisted_repos &&
+        blacklisted_repos.find((r) => r == org + "/" + repo)
+      ) {
+        result = true;
+      }
     }
 
-    /**
-     * Generate the list of repositories that should be scraped based on the provided configuration.
-    */
-    async GetWhitelistedRepos() {
-        let repos = [];
-
-        try {
-            for (let i = 0; i < whitelisted_organizations.length; i++) {
-                let org = whitelisted_organizations[i];
-                let org_repos = await this.GetOrganizationRepos(org);
-                org_repos.forEach(repo => {
-                    if (!this.IsBlacklisted(repo, org)) {
-                        repos.push({
-                            repo: repo,
-                            organisation: org,
-                            repo_type: 'whitelisted',
-                            dependencies: '[]'
-                        });
-                    }
-                })
-            }
-
-            if (whitelisted_repos?.length > 0) {
-                for (let i = 0; i < whitelisted_repos.length; i++) {
-                    let repo_full_name = whitelisted_repos[i];
-                    let split = repo_full_name.split('/');
-                    let org = split[0];
-                    let repo = split[1];
-
-                    if (org && repo && !this.IsBlacklisted(repo, org)) {
-                        let isValidRepo = await this.IsValidRepo(repo, org);
-
-                        if (isValidRepo) {
-                            repos.push({
-                                repo: repo,
-                                organisation: org,
-                                repo_type: 'whitelisted',
-                                dependencies: '[]'
-                            });
-                        }
-                    }
-                };
-            }
-
-            await db.SaveRepos(repos);
-
-        } catch (e) {
-            console.log(e);
-            ERROR(`GetWhitelistedRepos: ${e}`);
-        }
-
+    if (result) {
+      WARNING(`isBlacklisted: ${org}/${repo}`);
     }
 
-    /**
-     * Generate the list of repositories that should be scraped based on the provided configuration.
-    */
-    async GetRepoInfo(repo, org, dependencies, repo_type) {
-        let saved = false;
-        let result = undefined;
-        let repo_full_name = org + '/' + repo;
-        let requests = this.remaining_requests;
+    return result;
+  }
 
-        INFO(`GetRepoInfo [${org}/${repo}]`);
+  /**
+   * Check if an repository exists.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  async isValidRepo(repo, org) {
+    let result = false;
+    let repo_full_name = org + "/" + repo;
 
-        try {
-            const respGeneralInfo = await this.GetWithRateLimitCheck(this.api + 'repos/' + repo_full_name);
-            const respLanguages = await this.GetWithRateLimitCheck(this.api + 'repos/' + repo_full_name +'/languages');
+    try {
+      const respGeneralInfo = await this.getWithRateLimitCheck(
+        this.api + "repos/" + repo_full_name
+      );
 
-            let main_language = '';
-            let main_language_lines_max = 0;
-            let main_language_lines_sum = 0;
+      if (respGeneralInfo?.data?.id) {
+        result = true;
+      }
+    } catch (e) {
+      ERROR(`IsValidRepo: ${repo_full_name} -> ${e}`);
+    }
 
-            for (const [key, value] of Object.entries(respLanguages?.data)) {
-                if (main_language_lines_max < value) {
-                    main_language = key;
-                    main_language_lines_max = value;
-                }
+    return result;
+  }
 
-                main_language_lines_sum += value;
-            }
+  /**
+   * Generate the list of repositories that should be scraped based on the provided configuration.
+   */
+  async getWhitelistedRepos() {
+    let repos = [];
 
-            if (main_language && main_language_lines_sum) {
-                main_language += ' ';
-                main_language += (Math.round((main_language_lines_max / main_language_lines_sum) * 100)).toString();
-                main_language += '%';
-            }
+    try {
+      for (let i = 0; i < whitelisted_organizations.length; i++) {
+        let org = whitelisted_organizations[i];
+        let org_repos = await this.getOrganizationRepos(org);
+        org_repos.forEach((repo) => {
+          if (!this.isBlacklisted(repo, org)) {
+            repos.push({
+              repo: repo,
+              organisation: org,
+              repo_type: "whitelisted",
+              dependencies: "[]",
+            });
+          }
+        });
+      }
 
-            result = {
+      if (whitelisted_repos?.length > 0) {
+        for (let i = 0; i < whitelisted_repos.length; i++) {
+          let repo_full_name = whitelisted_repos[i];
+          let split = repo_full_name.split("/");
+          let org = split[0];
+          let repo = split[1];
+
+          if (org && repo && !this.isBlacklisted(repo, org)) {
+            let isValidRepo = await this.isValidRepo(repo, org);
+
+            if (isValidRepo) {
+              repos.push({
                 repo: repo,
                 organisation: org,
-                repo_type: repo_type,
-                stars : respGeneralInfo?.data?.stargazers_count,
-                default_branch: respGeneralInfo?.data?.default_branch,
-                created_at: respGeneralInfo?.data?.created_at,
-                updated_at: respGeneralInfo?.data?.updated_at,
-                pushed_at: respGeneralInfo?.data?.pushed_at,
-                owner_type: respGeneralInfo?.data?.owner?.type,
-                languages : JSON.stringify(respLanguages?.data),
-                dependencies: JSON.stringify(dependencies),
-                forks: respGeneralInfo?.data?.forks,
-                main_language: main_language,
+                repo_type: "whitelisted",
+                dependencies: "[]",
+              });
             }
+          }
+        }
+      }
 
-            await db.SaveRepoInfo(result);
-            saved = true;
+      await db.saveRepos(repos);
+    } catch (e) {
+      console.log(e);
+      ERROR(`getWhitelistedRepos: ${e}`);
+    }
+  }
 
-        } catch (e) {
-            ERROR(`GetRepoInfo: ${e}`);
+  /**
+   * Generate the list of repositories that should be scraped based on the provided configuration.
+   */
+  async getRepoInfo(repo, org, dependencies, repo_type) {
+    let saved = false;
+    let result = undefined;
+    let repo_full_name = org + "/" + repo;
+    let requests = this.remaining_requests;
+
+    INFO(`getRepoInfo [${org}/${repo}]`);
+
+    try {
+      const respGeneralInfo = await this.getWithRateLimitCheck(
+        this.api + "repos/" + repo_full_name
+      );
+      const respLanguages = await this.getWithRateLimitCheck(
+        this.api + "repos/" + repo_full_name + "/languages"
+      );
+
+      let main_language = "";
+      let main_language_lines_max = 0;
+      let main_language_lines_sum = 0;
+
+      for (const [key, value] of Object.entries(respLanguages?.data)) {
+        if (main_language_lines_max < value) {
+          main_language = key;
+          main_language_lines_max = value;
         }
 
-        requests = requests - this.remaining_requests;
+        main_language_lines_sum += value;
+      }
 
-        INFO(`GetRepoInfo [${org}/${repo}] done (used requests: ${requests})`);
-        return saved;
+      if (main_language && main_language_lines_sum) {
+        main_language += " ";
+        main_language += Math.round(
+          (main_language_lines_max / main_language_lines_sum) * 100
+        ).toString();
+        main_language += "%";
+      }
+
+      result = {
+        repo: repo,
+        organisation: org,
+        repo_type: repo_type,
+        stars: respGeneralInfo?.data?.stargazers_count,
+        default_branch: respGeneralInfo?.data?.default_branch,
+        created_at: respGeneralInfo?.data?.created_at,
+        updated_at: respGeneralInfo?.data?.updated_at,
+        pushed_at: respGeneralInfo?.data?.pushed_at,
+        owner_type: respGeneralInfo?.data?.owner?.type,
+        languages: JSON.stringify(respLanguages?.data),
+        dependencies: JSON.stringify(dependencies),
+        forks: respGeneralInfo?.data?.forks,
+        main_language: main_language,
+      };
+
+      await db.saveRepoInfo(result);
+      saved = true;
+    } catch (e) {
+      ERROR(`getRepoInfo: ${e}`);
     }
 
-    /**
-     * Get list of contributors of the repository.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    async GetRepoContributors(repo, org) {
-        let contributors = 0;
-        let repo_full_name = org + '/' + repo;
-        let requests = this.remaining_requests;
+    requests = requests - this.remaining_requests;
 
-        INFO(`GetRepoContributors [${org}/${repo}]`);
+    INFO(`getRepoInfo [${org}/${repo}] done (used requests: ${requests})`);
+    return saved;
+  }
 
-        try {
-            let have_items = false;
-            let page = 1;
+  /**
+   * Get list of contributors of the repository.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  async getRepoContributors(repo, org) {
+    let contributors = 0;
+    let repo_full_name = org + "/" + repo;
+    let requests = this.remaining_requests;
 
-            do {
+    INFO(`getRepoContributors [${org}/${repo}]`);
+
+    try {
+      let have_items = false;
+      let page = 1;
+
+      do {
+        let result = [];
+
+        const respContributors = await this.getWithRateLimitCheck(
+          this.api + "repos/" + repo_full_name + "/contributors",
+          {
+            per_page: PER_PAGE,
+            page: page,
+          }
+        );
+
+        if (respContributors?.data.length === PER_PAGE) {
+          have_items = true;
+          page++;
+        } else {
+          have_items = false;
+        }
+
+        respContributors?.data.forEach((contributor) => {
+          if (contributor?.type === "User") {
+            result.push({
+              id: contributor?.id,
+              dev_name: contributor?.login,
+              repo: repo,
+              organisation: org,
+              avatar_url: contributor?.avatar_url,
+              contributions: contributor?.contributions,
+            });
+          }
+        });
+
+        await db.saveDevs(result);
+        await db.saveContributions(result);
+
+        contributors += respContributors?.data?.length;
+      } while (have_items);
+    } catch (e) {
+      ERROR(`getRepoContributors: ${e}`);
+    }
+
+    requests = requests - this.remaining_requests;
+
+    INFO(
+      `getRepoContributors [${org}/${repo}] done (used requests: ${requests})`
+    );
+
+    return contributors;
+  }
+
+  /**
+   * Get list of branches of the repository.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   * @param {string} default_branch - The default branch of the repository.
+   */
+  async getRepoBranches(repo, org, default_branch) {
+    let result = [];
+    let repo_full_name = org + "/" + repo;
+
+    let requests = this.remaining_requests;
+
+    INFO(`getRepoBranches [${org}/${repo}]`);
+
+    if (default_branch) {
+      result.push(default_branch);
+    }
+
+    try {
+      let have_items = false;
+      let page = 1;
+
+      do {
+        const respBranches = await this.getWithRateLimitCheck(
+          this.api + "repos/" + repo_full_name + "/branches",
+          {
+            per_page: PER_PAGE,
+            page: page,
+          }
+        );
+
+        if (respBranches?.data.length === PER_PAGE) {
+          have_items = true;
+          page++;
+        } else {
+          have_items = false;
+        }
+
+        respBranches?.data.forEach((branch) => {
+          if (branch.name != default_branch) {
+            result.push(branch.name);
+          }
+        });
+      } while (have_items);
+    } catch (e) {
+      ERROR(`getRepoBranches: ${e}`);
+    }
+
+    requests = requests - this.remaining_requests;
+
+    INFO(`getRepoBranches [${org}/${repo}] done (used requests: ${requests})`);
+
+    return result;
+  }
+
+  /**
+   * Get list of commits of the repository.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  async getRepoCommits(repo, org) {
+    let commits = 0;
+    let commitsSet = new Set();
+    let repo_full_name = org + "/" + repo;
+    let requests = this.remaining_requests;
+
+    let recent_commits_date = subDays(
+      new Date(),
+      config.scraper.recent_commits_days
+    );
+
+    const default_branch_result = await db.query(
+      `SELECT default_branch FROM repos WHERE repo='${repo}' AND organisation='${org}';`
+    );
+    const default_branch = default_branch_result?.rows[0]?.default_branch;
+
+    let branches = await this.getRepoBranches(repo, org, default_branch);
+
+    INFO(`getRepoCommits [${org}/${repo}] branches ${branches.length}`);
+
+    let progress = 0;
+    let total_progress = branches.length;
+    const progressBar = new cliProgress.SingleBar(
+      {},
+      cliProgress.Presets.shades_classic
+    );
+    progressBar.start(branches.length, 0);
+
+    if (branches.length) {
+      var branchesSlice = branches;
+      while (branchesSlice.length) {
+        await Promise.all(
+          branchesSlice.splice(0, SCRAPE_LIMIT).map(async (branch) => {
+            try {
+              let since = undefined;
+              let have_items = false;
+              let page = 1;
+
+              const latest_commit_date_result = await db.query(
+                `SELECT latest_commit_date FROM branches WHERE repo='${repo}' AND organisation='${org}' AND branch='${branch}';`
+              );
+              if (latest_commit_date_result?.rows[0]?.latest_commit_date) {
+                let latest_commit_date_from_db = new Date(
+                  latest_commit_date_result?.rows[0]?.latest_commit_date
+                );
+                since = latest_commit_date_from_db.toISOString();
+              } else {
+                since = recent_commits_date.toISOString();
+              }
+
+              let latest_commit_timestamp = undefined;
+              let latest_commit_date = null;
+              if (since) {
+                latest_commit_timestamp = new Date(since);
+                latest_commit_date = since;
+              }
+
+              do {
                 let result = [];
 
-                const respContributors = await this.GetWithRateLimitCheck(
-                    this.api + 'repos/' + repo_full_name + '/contributors',
-                    {
-                        per_page: PER_PAGE,
-                        page: page,
-                    });
-
-                if (respContributors?.data.length === PER_PAGE) {
-                    have_items = true;
-                    page++;
-                } else {
-                    have_items = false;
-                }
-
-                respContributors?.data.forEach(contributor => {
-                    if (contributor?.type === 'User') {
-                        result.push({
-                            id: contributor?.id,
-                            dev_name: contributor?.login,
-                            repo: repo,
-                            organisation: org,
-                            avatar_url: contributor?.avatar_url,
-                            contributions: contributor?.contributions,
-                        })
-                    }
-                });
-
-                await db.SaveDevs(result);
-                await db.SaveContributions(result);
-
-                contributors += respContributors?.data?.length;
-            } while (have_items);
-
-        } catch (e) {
-            ERROR(`GetRepoContributors: ${e}`);
-        }
-
-        requests = requests - this.remaining_requests;
-
-        INFO(`GetRepoContributors [${org}/${repo}] done (used requests: ${requests})`);
-
-        return contributors;
-    }
-
-    /**
-     * Get list of branches of the repository.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-     * @param {string} default_branch - The default branch of the repository.
-    */
-    async GetRepoBranches(repo, org, default_branch) {
-        let result = [];
-        let repo_full_name = org + '/' + repo;
-
-        let requests = this.remaining_requests;
-
-        INFO(`GetRepoBranches [${org}/${repo}]`);
-
-        if (default_branch) {
-            result.push(default_branch);
-        }
-
-        try {
-            let have_items = false;
-            let page = 1;
-
-            do {
-                const respBranches = await this.GetWithRateLimitCheck(
-                    this.api + 'repos/' + repo_full_name + '/branches',
-                    {
-                        per_page: PER_PAGE,
-                        page: page,
-                    });
-
-                if (respBranches?.data.length === PER_PAGE) {
-                    have_items = true;
-                    page++;
-                } else {
-                    have_items = false;
-                }
-
-                respBranches?.data.forEach(branch => {
-                    if (branch.name != default_branch) {
-                        result.push(branch.name);
-                    }
-                });
-            } while (have_items);
-
-        } catch (e) {
-            ERROR(`GetRepoBranches: ${e}`);
-        }
-
-        requests = requests - this.remaining_requests;
-
-        INFO(`GetRepoBranches [${org}/${repo}] done (used requests: ${requests})`);
-
-        return result;
-
-    }
-
-    /**
-     * Get list of commits of the repository.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    async GetRepoCommits(repo, org) {
-        let commits = 0;
-        let commitsSet = new Set();
-        let repo_full_name = org + '/' + repo;
-        let requests = this.remaining_requests;
-        
-        let recent_commits_date = subDays(new Date(), config.scraper.recent_commits_days);
-
-        const default_branch_result = await db.Query(`SELECT default_branch FROM repos WHERE repo='${repo}' AND organisation='${org}';`);
-        const default_branch = default_branch_result?.rows[0]?.default_branch;
-
-        let branches = await this.GetRepoBranches(repo, org, default_branch);
-
-        INFO(`GetRepoCommits [${org}/${repo}] branches ${branches.length}`);
-
-        let progress = 0;
-        let total_progress = branches.length;
-        const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-        progressBar.start(branches.length, 0);
-        
-        if (branches.length) {
-            var branchesSlice = branches;
-            while (branchesSlice.length) {
-                await Promise.all(branchesSlice.splice(0, SCRAPE_LIMIT).map(async (branch) => {
-                    try {
-                        let since = undefined;
-                        let have_items = false;
-                        let page = 1;
-    
-                        const latest_commit_date_result = await db.Query(`SELECT latest_commit_date FROM branches WHERE repo='${repo}' AND organisation='${org}' AND branch='${branch}';`);
-                        if (latest_commit_date_result?.rows[0]?.latest_commit_date) {
-                            let latest_commit_date_from_db = new Date(latest_commit_date_result?.rows[0]?.latest_commit_date)
-                            since = latest_commit_date_from_db.toISOString();
-                        } else {
-                            since = recent_commits_date.toISOString();
-                        }
-    
-                        let latest_commit_timestamp = undefined;
-                        let latest_commit_date = null;
-                        if (since) {
-                            latest_commit_timestamp = new Date(since);
-                            latest_commit_date = since;
-                        }
-    
-                        do {
-                            let result = [];
-    
-                            let params = {
-                                per_page: PER_PAGE,
-                                page: page,
-                                sha: branch,
-                            };
-    
-                            if (since) {
-                                params.since = since;
-                            }
-    
-                            const respCommits = await this.GetWithRateLimitCheck(
-                                this.api + 'repos/' + repo_full_name + '/commits',
-                                params);
-    
-                            if (respCommits?.data.length === PER_PAGE) {
-                                have_items = true;
-                                page++;
-                            } else {
-                                have_items = false;
-                            }
-    
-                            respCommits?.data.forEach(commit => {
-                                if (!latest_commit_timestamp) {
-                                    if (commit?.commit?.committer?.date) {
-                                        latest_commit_timestamp = new Date(commit?.commit?.committer?.date);
-                                        latest_commit_date = commit?.commit?.committer?.date;
-                                    }
-                                } else {
-                                    if (commit?.commit?.committer?.date) {
-                                        const new_commit_timestamp = new Date(commit?.commit?.committer?.date);
-                                        if (new_commit_timestamp > latest_commit_timestamp) {
-                                            latest_commit_timestamp = new_commit_timestamp;
-                                            latest_commit_date = commit?.commit?.committer?.date;
-                                        }
-                                    }
-                                }
-    
-                                if (commit.sha && !commitsSet.has(commit.sha)) {
-                                    commitsSet.add(commit.sha);
-                                    result.push({
-                                        commit_hash: commit.sha,
-                                        dev_id: commit?.author?.id ? commit?.author?.id : null,
-                                        dev_name: commit?.author?.login ? commit?.author?.login : null,
-                                        repo: repo,
-                                        organisation: org,
-                                        branch: branch,
-                                        commit_date: commit?.commit?.committer?.date,
-                                        message: commit?.commit?.message
-                                    })
-                                }
-                            });
-    
-                            await db.SaveCommits(result);
-                            commits += result.length;
-                        } while (have_items);
-    
-                        await db.SaveBranch({
-                            repo: repo,
-                            organisation: org,
-                            branch: branch,
-                            latest_commit_date: latest_commit_date
-                        });
-    
-                    } catch (e) {
-                        ERROR(`GetRepoCommits: ${e}`);
-                    }
-                }));
-
-                progress += SCRAPE_LIMIT;
-                if (progress > total_progress) {
-                    progress = total_progress;
-                }
-
-                progressBar.update(progress);
-            }
-        }
-
-        progressBar.stop();
-
-        requests = requests - this.remaining_requests;
-
-        INFO(`GetRepoCommits [${org}/${repo}] done (used requests: ${requests})`);
-
-        return commits;
-    }
-
-    /**
-     * Get list of PRs of the repository.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    async GetRepoPRs(repo, org) {
-        let prs = 0;
-        let repo_full_name = org + '/' + repo;
-        let requests = this.remaining_requests;
-
-        INFO(`GetRepoPRs [${org}/${repo}]`);
-
-        try {
-            let result = [];
-            let have_items = false;
-            let page = 1;
-
-            do {
                 let params = {
-                    per_page: PER_PAGE,
-                    page: page,
-                    state: 'all',
-                };
-
-                const respPRs = await this.GetWithRateLimitCheck(
-                    this.api + 'repos/' + repo_full_name + '/pulls', params);
-
-                if (respPRs?.data.length === PER_PAGE) {
-                    have_items = true;
-                    page++;
-                } else {
-                    have_items = false;
-                }
-
-                respPRs?.data.forEach(pr => {
-                    result.push({
-                        id: pr?.id,
-                        pr_number: pr?.number,
-                        title: pr?.title,
-                        html_url: pr?.html_url,
-                        pr_state: pr?.state,
-                        created_at: pr?.created_at,
-                        updated_at: pr?.updated_at,
-                        closed_at: pr?.closed_at,
-                        merged_at:  pr?.merged_at,
-                        repo: repo,
-                        organisation: org,
-                        dev_name: pr?.user?.login,
-                    });
-                });
-
-                await db.SavePRs(result);
-
-                prs += result.length;
-            } while (have_items);
-
-        } catch (e) {
-            ERROR(`GetRepoPRs: ${e}`);
-        }
-
-        requests = requests - this.remaining_requests;
-
-        INFO(`GetRepoPRs [${org}/${repo}] done (used requests: ${requests})`);
-
-        return prs;
-    }
-
-    /**
-     * Get list of issues of the repository.
-     * @param {string} repo - The name of the repository.
-     * @param {string} org - The name of the organization.
-    */
-    async GetRepoIssues(repo, org) {
-        let issues = 0;
-        let repo_full_name = org + '/' + repo;
-        let requests = this.remaining_requests;
-        let since = undefined;
-
-        const latest_issue_date = await db.Query(`SELECT MAX(updated_at) FROM issues WHERE repo='${repo}' AND organisation='${org}';`);
-        if (latest_issue_date?.rows[0]?.max) {
-            since = new Date(latest_issue_date?.rows[0]?.max).toISOString();
-        }
-
-        if (since) {
-            INFO(`GetRepoIssues [${org}/${repo}] updated since ${since}`);
-        } else {
-            INFO(`GetRepoIssues [${org}/${repo}]`);
-        }
-
-        try {
-            let result = [];
-            let have_items = false;
-            let page = 1;
-
-            do {
-                let params = {
-                    per_page: PER_PAGE,
-                    page: page,
-                    state: 'all',
+                  per_page: PER_PAGE,
+                  page: page,
+                  sha: branch,
                 };
 
                 if (since) {
-                    params.since = since;
+                  params.since = since;
                 }
 
-                const respIssues = await this.GetWithRateLimitCheck(
-                    this.api + 'repos/' + repo_full_name + '/issues', params);
+                const respCommits = await this.getWithRateLimitCheck(
+                  this.api + "repos/" + repo_full_name + "/commits",
+                  params
+                );
 
-                if (respIssues?.data.length === PER_PAGE) {
-                    have_items = true;
-                    page++;
+                if (respCommits?.data.length === PER_PAGE) {
+                  have_items = true;
+                  page++;
                 } else {
-                    have_items = false;
+                  have_items = false;
                 }
 
-                respIssues?.data.forEach(issue => {
+                respCommits?.data.forEach((commit) => {
+                  if (!latest_commit_timestamp) {
+                    if (commit?.commit?.committer?.date) {
+                      latest_commit_timestamp = new Date(
+                        commit?.commit?.committer?.date
+                      );
+                      latest_commit_date = commit?.commit?.committer?.date;
+                    }
+                  } else {
+                    if (commit?.commit?.committer?.date) {
+                      const new_commit_timestamp = new Date(
+                        commit?.commit?.committer?.date
+                      );
+                      if (new_commit_timestamp > latest_commit_timestamp) {
+                        latest_commit_timestamp = new_commit_timestamp;
+                        latest_commit_date = commit?.commit?.committer?.date;
+                      }
+                    }
+                  }
+
+                  if (commit.sha && !commitsSet.has(commit.sha)) {
+                    commitsSet.add(commit.sha);
                     result.push({
-                        id: issue?.id,
-                        issue_number: issue?.number,
-                        title: issue?.title,
-                        html_url: issue?.html_url,
-                        issue_state: issue?.state,
-                        created_at: issue?.created_at,
-                        updated_at: issue?.updated_at,
-                        closed_at: issue?.closed_at,
-                        repo: repo,
-                        organisation: org,
-                        dev_name: issue?.user?.login,
+                      commit_hash: commit.sha,
+                      dev_id: commit?.author?.id ? commit?.author?.id : null,
+                      dev_name: commit?.author?.login
+                        ? commit?.author?.login
+                        : null,
+                      repo: repo,
+                      organisation: org,
+                      branch: branch,
+                      commit_date: commit?.commit?.committer?.date,
+                      message: commit?.commit?.message,
                     });
+                  }
                 });
 
-                await db.SaveIssues(result);
+                await db.saveCommits(result);
+                commits += result.length;
+              } while (have_items);
 
-                issues += result.length;
-            } while (have_items);
-
-        } catch (e) {
-            ERROR(`GetRepoIssues: ${e}`);
-        }
-
-        requests = requests - this.remaining_requests;
-
-        INFO(`GetRepoIssues [${org}/${repo}] done (used requests: ${requests})`);
-
-        return issues;
-    }
-
-    /**
-     * Get list of repositories to be scraped.
-    */
-    async GetReposList() {
-        let result = [];
-        try {
-            let repo_list = await db.Query('SELECT * FROM repos_list;');
-            if (repo_list?.rows) {
-                result = repo_list?.rows;
+              await db.saveBranch({
+                repo: repo,
+                organisation: org,
+                branch: branch,
+                latest_commit_date: latest_commit_date,
+              });
+            } catch (e) {
+              ERROR(`getRepoCommits: ${e}`);
             }
+          })
+        );
 
-        } catch (e) {
-            ERROR(`GetReposList: ${e}`);
+        progress += SCRAPE_LIMIT;
+        if (progress > total_progress) {
+          progress = total_progress;
         }
 
-        return result;
+        progressBar.update(progress);
+      }
     }
 
-    /**
-     * Check if there are new changes in an repository since the last scrape.
-    */
-    async GetRepoStatus(repo, org) {
-        let repo_full_name = org + '/' + repo;
+    progressBar.stop();
 
-        INFO(`GetRepoStatus [${org}/${repo}]`);
+    requests = requests - this.remaining_requests;
 
-        let result = {
-            updated: true,
-            pushed: true
+    INFO(`getRepoCommits [${org}/${repo}] done (used requests: ${requests})`);
+
+    return commits;
+  }
+
+  /**
+   * Get list of PRs of the repository.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  async getRepoPRs(repo, org) {
+    let prs = 0;
+    let repo_full_name = org + "/" + repo;
+    let requests = this.remaining_requests;
+
+    INFO(`getRepoPRs [${org}/${repo}]`);
+
+    try {
+      let result = [];
+      let have_items = false;
+      let page = 1;
+
+      do {
+        let params = {
+          per_page: PER_PAGE,
+          page: page,
+          state: "all",
         };
 
-        try {
-            let repo_list = await db.Query(`SELECT updated_at,pushed_at FROM repos WHERE repo='${repo}' AND organisation='${org}'`);
-            if (repo_list?.rows) {
-                const updated_at = repo_list?.rows[0]?.updated_at;
-                const pushed_at = repo_list?.rows[0]?.pushed_at;
+        const respPRs = await this.getWithRateLimitCheck(
+          this.api + "repos/" + repo_full_name + "/pulls",
+          params
+        );
 
-                if (updated_at && pushed_at) {
-                    const respGeneralInfo = await this.GetWithRateLimitCheck(this.api + 'repos/' + repo_full_name);
-
-                    let updated_timestamp_db = new Date(updated_at);
-                    let pushed_timestamp_db = new Date(pushed_at);
-                    let updated_timestamp_api = new Date(respGeneralInfo?.data?.updated_at);
-                    let pushed_timestamp_api = new Date(respGeneralInfo?.data?.pushed_at);
-        
-                    if (updated_timestamp_db.getTime() === updated_timestamp_api.getTime()) {
-                        result.updated = false;
-                    }
-
-                    if (pushed_timestamp_db.getTime() === pushed_timestamp_api.getTime()) {
-                        result.pushed = false;
-                    }
-                }
-            }
-
-        } catch (e) {
-            ERROR(`GetRepoStatus: ${e}`);
+        if (respPRs?.data.length === PER_PAGE) {
+          have_items = true;
+          page++;
+        } else {
+          have_items = false;
         }
 
-        return result;
+        respPRs?.data.forEach((pr) => {
+          result.push({
+            id: pr?.id,
+            pr_number: pr?.number,
+            title: pr?.title,
+            html_url: pr?.html_url,
+            pr_state: pr?.state,
+            created_at: pr?.created_at,
+            updated_at: pr?.updated_at,
+            closed_at: pr?.closed_at,
+            merged_at: pr?.merged_at,
+            repo: repo,
+            organisation: org,
+            dev_name: pr?.user?.login,
+          });
+        });
+
+        await db.savePRs(result);
+
+        prs += result.length;
+      } while (have_items);
+    } catch (e) {
+      ERROR(`getRepoPRs: ${e}`);
     }
 
-    /**
-     * Start the scraping process for all the repos within the repos list.
-    */
-    async Run() {
-        STATUS('Scraping');
+    requests = requests - this.remaining_requests;
 
-        await this.GetWhitelistedRepos();
+    INFO(`getRepoPRs [${org}/${repo}] done (used requests: ${requests})`);
 
-        const repos = await this.GetReposList();
-    
-        for (let i = 0; i < repos.length; i++) {
-            const repo = repos[i].repo;
-            const org = repos[i].organisation;
-            const repo_type = repos[i].repo_type;
-            const dependencies = repos[i].dependencies;
+    return prs;
+  }
 
-            STATUS(`Scraping [${org}/${repo}] ${i+1} of ${repos.length} repos`);
+  /**
+   * Get list of issues of the repository.
+   * @param {string} repo - The name of the repository.
+   * @param {string} org - The name of the organization.
+   */
+  async getRepoIssues(repo, org) {
+    let issues = 0;
+    let repo_full_name = org + "/" + repo;
+    let requests = this.remaining_requests;
+    let since = undefined;
 
-            let status = await this.GetRepoStatus(repo, org);
+    const latest_issue_date = await db.query(
+      `SELECT MAX(updated_at) FROM issues WHERE repo='${repo}' AND organisation='${org}';`
+    );
+    if (latest_issue_date?.rows[0]?.max) {
+      since = new Date(latest_issue_date?.rows[0]?.max).toISOString();
+    }
 
-            if (status.pushed) {
-                await this.GetRepoCommits(repo, org);
-                await this.GetRepoPRs(repo, org);
-            }
+    if (since) {
+      INFO(`getRepoIssues [${org}/${repo}] updated since ${since}`);
+    } else {
+      INFO(`getRepoIssues [${org}/${repo}]`);
+    }
 
-            if (status.updated) {
-                await this.GetRepoContributors(repo, org);
-                await this.GetRepoIssues(repo, org);
-                await this.GetRepoInfo(repo, org, dependencies, repo_type);
-            }
+    try {
+      let result = [];
+      let have_items = false;
+      let page = 1;
 
-            if (!status.pushed && !status.updated) {
-                INFO(`Skip Scraping [${org}/${repo}] no updates`);
-            } else {
-                INFO(`Refresh views`);
-                await db.RefreshView('overview_view');
-                await db.RefreshView('top_contributors_view');
-                await db.RefreshView('commits_view');
-                await db.RefreshView('active_contributors_view');
-                await db.RefreshView('recent_commits_view');
-                await db.RefreshView('repositories_view');
-                INFO(`Refresh views done`);
-            }
+      do {
+        let params = {
+          per_page: PER_PAGE,
+          page: page,
+          state: "all",
+        };
+
+        if (since) {
+          params.since = since;
         }
 
-        STATUS('Scraping completed');
+        const respIssues = await this.getWithRateLimitCheck(
+          this.api + "repos/" + repo_full_name + "/issues",
+          params
+        );
+
+        if (respIssues?.data.length === PER_PAGE) {
+          have_items = true;
+          page++;
+        } else {
+          have_items = false;
+        }
+
+        respIssues?.data.forEach((issue) => {
+          result.push({
+            id: issue?.id,
+            issue_number: issue?.number,
+            title: issue?.title,
+            html_url: issue?.html_url,
+            issue_state: issue?.state,
+            created_at: issue?.created_at,
+            updated_at: issue?.updated_at,
+            closed_at: issue?.closed_at,
+            repo: repo,
+            organisation: org,
+            dev_name: issue?.user?.login,
+          });
+        });
+
+        await db.saveIssues(result);
+
+        issues += result.length;
+      } while (have_items);
+    } catch (e) {
+      ERROR(`getRepoIssues: ${e}`);
     }
+
+    requests = requests - this.remaining_requests;
+
+    INFO(`getRepoIssues [${org}/${repo}] done (used requests: ${requests})`);
+
+    return issues;
+  }
+
+  /**
+   * Get list of repositories to be scraped.
+   */
+  async getReposList() {
+    let result = [];
+    try {
+      let repo_list = await db.query("SELECT * FROM repos_list;");
+      if (repo_list?.rows) {
+        result = repo_list?.rows;
+      }
+    } catch (e) {
+      ERROR(`getReposList: ${e}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if there are new changes in an repository since the last scrape.
+   */
+  async getRepoStatus(repo, org) {
+    let repo_full_name = org + "/" + repo;
+
+    INFO(`getRepoStatus [${org}/${repo}]`);
+
+    let result = {
+      updated: true,
+      pushed: true,
+    };
+
+    try {
+      let repo_list = await db.query(
+        `SELECT updated_at,pushed_at FROM repos WHERE repo='${repo}' AND organisation='${org}'`
+      );
+      if (repo_list?.rows) {
+        const updated_at = repo_list?.rows[0]?.updated_at;
+        const pushed_at = repo_list?.rows[0]?.pushed_at;
+
+        if (updated_at && pushed_at) {
+          const respGeneralInfo = await this.getWithRateLimitCheck(
+            this.api + "repos/" + repo_full_name
+          );
+
+          let updated_timestamp_db = new Date(updated_at);
+          let pushed_timestamp_db = new Date(pushed_at);
+          let updated_timestamp_api = new Date(
+            respGeneralInfo?.data?.updated_at
+          );
+          let pushed_timestamp_api = new Date(respGeneralInfo?.data?.pushed_at);
+
+          if (
+            updated_timestamp_db.getTime() === updated_timestamp_api.getTime()
+          ) {
+            result.updated = false;
+          }
+
+          if (
+            pushed_timestamp_db.getTime() === pushed_timestamp_api.getTime()
+          ) {
+            result.pushed = false;
+          }
+        }
+      }
+    } catch (e) {
+      ERROR(`getRepoStatus: ${e}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Start the scraping process for all the repos within the repos list.
+   */
+  async run() {
+    STATUS("scraping");
+
+    await this.getWhitelistedRepos();
+
+    const repos = await this.getReposList();
+
+    for (let i = 0; i < repos.length; i++) {
+      const repo = repos[i].repo;
+      const org = repos[i].organisation;
+      const repo_type = repos[i].repo_type;
+      const dependencies = repos[i].dependencies;
+
+      STATUS(`scraping [${org}/${repo}] ${i + 1} of ${repos.length} repos`);
+
+      let status = await this.getRepoStatus(repo, org);
+
+      if (status.pushed) {
+        await this.getRepoCommits(repo, org);
+        await this.getRepoPRs(repo, org);
+      }
+
+      if (status.updated) {
+        await this.getRepoContributors(repo, org);
+        await this.getRepoIssues(repo, org);
+        await this.getRepoInfo(repo, org, dependencies, repo_type);
+      }
+
+      if (!status.pushed && !status.updated) {
+        INFO(`skip Scraping [${org}/${repo}] no updates`);
+      } else {
+        INFO(`Refresh views`);
+        await db.refreshView("overview_view");
+        await db.refreshView("top_contributors_view");
+        await db.refreshView("commits_view");
+        await db.refreshView("active_contributors_view");
+        await db.refreshView("recent_commits_view");
+        await db.refreshView("repositories_view");
+        INFO(`refresh views done`);
+      }
+    }
+
+    STATUS("scraping completed");
+  }
 }
 
 module.exports = {
-    Scraper
+  Scraper,
 };
