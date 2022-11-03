@@ -1,5 +1,21 @@
 version: '3'
 services:
+  postgress-server:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: dotpulse
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dotpulse
   dotpulse-scraper:
+    depends_on: 
+      - postgress-server
     restart: always
     build: .
+  dotpulse-api:
+    depends_on: 
+      - postgress-server
+    restart: always
+    build: ../dotpulse-api/
+    ports:
+      - "3000:3000"
