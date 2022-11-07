@@ -21,8 +21,8 @@ const whitelisted_repos = config.scraper.whitelisted_repos;
 class Scraper {
   /**
    * Initialize the scraper instance.
-   * @param {string} api - The Github API.
-   * @param {string} token_list - The list of Github tokens.
+   * @param {string} api - the Github API
+   * @param {string} token_list - the list of Github tokens
    */
   constructor(api, token_list) {
     this.api = api;
@@ -55,10 +55,10 @@ class Scraper {
   }
 
   /**
-   * Make an get request to the Github API.
-   * @param {string} url - The Github API URL.
-   * @param {string} params - The params of the request.
-   * @param {boolean} verbose - Display additional logs.
+   * Make a get request to the Github API.
+   * @param {string} url - the Github API URL
+   * @param {string} params - the params of the request
+   * @param {boolean} verbose - display additional logs
    */
   async get(url, params, verbose = false) {
     let response = undefined;
@@ -133,10 +133,10 @@ class Scraper {
   }
 
   /**
-   * Make an get request to the Github API and update the remaining requests.
-   * @param {string} url - The Github API URL.
-   * @param {string} params - The params of the request.
-   * @param {boolean} verbose - Display additional logs.
+   * Make a get request to the Github API and update the remaining requests.
+   * @param {string} url - the Github API URL
+   * @param {string} params - the params of the request
+   * @param {boolean} verbose - display additional logs
    */
   async getWithRateLimitCheck(url, params, verbose = false) {
     await this.updateRateLimit();
@@ -151,8 +151,8 @@ class Scraper {
   }
 
   /**
-   * Get all the list of repos within an organization.
-   * @param {string} org - The name of the organization.
+   * Get the list of repositories within an organization.
+   * @param {string} org - the name of the organization
    */
   async getOrganizationRepos(org) {
     let result = [];
@@ -195,9 +195,9 @@ class Scraper {
   }
 
   /**
-   * Check if an repository should be skiped based on the provided configuration.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Check if a repository should be skipped based on the provided configuration.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   isBlacklisted(repo, org) {
     let result = false;
@@ -224,9 +224,9 @@ class Scraper {
   }
 
   /**
-   * Check if an repository exists.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Check if a repository exists.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   async isValidRepo(repo, org) {
     let result = false;
@@ -367,9 +367,9 @@ class Scraper {
   }
 
   /**
-   * Get list of contributors of the repository.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Get the list of contributors that made commits on a specified repository.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   async getRepoContributors(repo, org) {
     let contributors = 0;
@@ -432,10 +432,10 @@ class Scraper {
   }
 
   /**
-   * Get list of branches of the repository.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
-   * @param {string} default_branch - The default branch of the repository.
+   * Get the list of branches that a repository has.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
+   * @param {string} default_branch - the default branch of the repository
    */
   async getRepoBranches(repo, org, default_branch) {
     let result = [];
@@ -487,9 +487,9 @@ class Scraper {
   }
 
   /**
-   * Get list of commits of the repository.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Get list of commits made in a repository.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   async getRepoCommits(repo, org) {
     let commits = 0;
@@ -645,9 +645,9 @@ class Scraper {
   }
 
   /**
-   * Get list of PRs of the repository.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Get the list of PRs from a repository.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   async getRepoPRs(repo, org) {
     let prs = 0;
@@ -713,9 +713,9 @@ class Scraper {
   }
 
   /**
-   * Get list of issues of the repository.
-   * @param {string} repo - The name of the repository.
-   * @param {string} org - The name of the organization.
+   * Get the list of issues that are part of a specified repository.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
    */
   async getRepoIssues(repo, org) {
     let issues = 0;
@@ -796,7 +796,7 @@ class Scraper {
   }
 
   /**
-   * Get list of repositories to be scraped.
+   * Get the list of repositories to be scraped.
    */
   async getReposList() {
     let result = [];
@@ -813,7 +813,7 @@ class Scraper {
   }
 
   /**
-   * Check if there are new changes in an repository since the last scrape.
+   * Check if there are new changes in a repository since the last scraping cycle.
    */
   async getRepoStatus(repo, org) {
     let repo_full_name = org + "/" + repo;

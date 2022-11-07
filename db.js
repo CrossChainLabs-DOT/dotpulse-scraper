@@ -30,9 +30,9 @@ class DB {
   }
 
   /**
-   * Run an query.
-   * @param {string} query - The query.
-   * @param {string} log - The log.
+   * Run a query.
+   * @param {string} query - the query
+   * @param {string} log - the log
    */
   async query(query, log) {
     let result = undefined;
@@ -46,8 +46,8 @@ class DB {
   }
 
   /**
-   * Refresh an materialized view.
-   * @param {string} view - The name view.
+   * Refresh a materialized view.
+   * @param {string} view - the name of the view
    */
   async refreshView(view) {
     try {
@@ -60,8 +60,8 @@ class DB {
   }
 
   /**
-   * Save the list of repos
-   * @param {object} repos - The list of repos.
+   * Save the list of repositories.
+   * @param {object} repos - the list of repositories
    */
   async saveRepos(repos) {
     for (let i = 0; i < repos.length; i++) {
@@ -85,8 +85,8 @@ class DB {
   }
 
   /**
-   * Save the repo info
-   * @param {object} repo - The repo info.
+   * Save the repositories information.
+   * @param {object} repo - the repo info
    */
   async saveRepoInfo(repo) {
     try {
@@ -118,7 +118,7 @@ class DB {
 
   /**
    * Save the branch info
-   * @param {object} branch - The branch info.
+   * @param {object} branch - the branch info
    */
   async saveBranch(branch) {
     try {
@@ -149,8 +149,8 @@ class DB {
   }
 
   /**
-   * Save the list of devs
-   * @param {object} devs - The list of devs.
+   * Save the list of developers
+   * @param {object} devs - the list of devs
    */
   async saveDevs(devs) {
     let query = "";
@@ -176,8 +176,8 @@ class DB {
   }
 
   /**
-   * Save the list of contributions of the devs
-   * @param {object} devs - The list of devs with contributions.
+   * Save the list of contributions made by developers.
+   * @param {object} devs - the list of devs with contributions
    */
   async saveContributions(devs) {
     let query = "";
@@ -204,8 +204,8 @@ class DB {
   }
 
   /**
-   * Save the list of commits
-   * @param {object} commits - The list of commits.
+   * Save the list of commits.
+   * @param {object} commits - the list of commits
    */
   async saveCommits(commits) {
     let query = "";
@@ -234,8 +234,8 @@ class DB {
   }
 
   /**
-   * Save the list of prs
-   * @param {object} prs - The list of prs.
+   * Save the list of PRs.
+   * @param {object} prs - the list of PRs
    */
   async savePRs(prs) {
     let query = "";
@@ -278,8 +278,8 @@ class DB {
   }
 
   /**
-   * Save the list of issues
-   * @param {object} issues - The list of issues.
+   * Save the list of issues.
+   * @param {object} issues - the list of issues
    */
   async saveIssues(issues) {
     let query = "";
