@@ -10,7 +10,7 @@
 ### Run DotPulse Scraper and DotPulse API
 
 ```
-    git clone https://github.com/CrossChainLabs-DOT/dotpulse-scraper
+    git clone https://github.com/CrossChainLabs-DOT/dotpulse-scraper.git
     git clone https://github.com/CrossChainLabs-DOT/dotpulse-api.git
     
     cd dotpulse-api  
