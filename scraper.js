@@ -890,7 +890,7 @@ class Scraper {
         await this.getRepoPRs(repo, org);
       }
 
-      if (status.updated) {
+      if (status.updated || status.pushed) {
         await this.getRepoContributors(repo, org);
         await this.getRepoIssues(repo, org);
         await this.getRepoInfo(repo, org, dependencies, repo_type);
