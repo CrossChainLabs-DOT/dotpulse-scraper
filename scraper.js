@@ -644,73 +644,6 @@ class Scraper {
     return commits;
   }
 
-  /**
-   * Get the list of PRs from a repository.
-   * @param {string} repo - the name of the repository
-   * @param {string} org - the name of the organization
-   */
-  async getRepoPRs(repo, org) {
-    let prs = 0;
-    let repo_full_name = org + "/" + repo;
-    let requests = this.remaining_requests;
-
-    INFO(`getRepoPRs [${org}/${repo}]`);
-
-    try {
-      let result = [];
-      let have_items = false;
-      let page = 1;
-
-      do {
-        let params = {
-          per_page: PER_PAGE,
-          page: page,
-          state: "all",
-        };
-
-        const respPRs = await this.getWithRateLimitCheck(
-          this.api + "repos/" + repo_full_name + "/pulls",
-          params
-        );
-
-        if (respPRs?.data.length === PER_PAGE) {
-          have_items = true;
-          page++;
-        } else {
-          have_items = false;
-        }
-
-        respPRs?.data.forEach((pr) => {
-          result.push({
-            id: pr?.id,
-            pr_number: pr?.number,
-            title: pr?.title,
-            html_url: pr?.html_url,
-            pr_state: pr?.state,
-            created_at: pr?.created_at,
-            updated_at: pr?.updated_at,
-            closed_at: pr?.closed_at,
-            merged_at: pr?.merged_at,
-            repo: repo,
-            organisation: org,
-            dev_name: pr?.user?.login,
-          });
-        });
-
-        await db.savePRs(result);
-
-        prs += result.length;
-      } while (have_items);
-    } catch (e) {
-      ERROR(`getRepoPRs: ${e}`);
-    }
-
-    requests = requests - this.remaining_requests;
-
-    INFO(`getRepoPRs [${org}/${repo}] done (used requests: ${requests})`);
-
-    return prs;
-  }
 
   /**
    * Get the list of issues that are part of a specified repository.
@@ -737,11 +670,11 @@ class Scraper {
     }
 
     try {
-      let result = [];
       let have_items = false;
       let page = 1;
 
       do {
+        let result = [];
         let params = {
           per_page: PER_PAGE,
           page: page,
@@ -765,11 +698,16 @@ class Scraper {
         }
 
         respIssues?.data.forEach((issue) => {
+          let is_pr = false;
+          if (issue?.pull_request) {
+              is_pr = true;
+          }
           result.push({
             id: issue?.id,
             issue_number: issue?.number,
             title: issue?.title,
             html_url: issue?.html_url,
+            is_pr: is_pr,
             issue_state: issue?.state,
             created_at: issue?.created_at,
             updated_at: issue?.updated_at,
@@ -887,7 +825,6 @@ class Scraper {
 
       if (status.pushed) {
         await this.getRepoCommits(repo, org);
-        await this.getRepoPRs(repo, org);
       }
 
       if (status.updated || status.pushed) {

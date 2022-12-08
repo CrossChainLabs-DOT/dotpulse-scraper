@@ -28,7 +28,6 @@
         * [.getRepoContributors(repo, org)](#module_SCRAPER..Scraper+getRepoContributors)
         * [.getRepoBranches(repo, org, default_branch)](#module_SCRAPER..Scraper+getRepoBranches)
         * [.getRepoCommits(repo, org)](#module_SCRAPER..Scraper+getRepoCommits)
-        * [.getRepoPRs(repo, org)](#module_SCRAPER..Scraper+getRepoPRs)
         * [.getRepoIssues(repo, org)](#module_SCRAPER..Scraper+getRepoIssues)
         * [.getReposList()](#module_SCRAPER..Scraper+getReposList)
         * [.getRepoStatus()](#module_SCRAPER..Scraper+getRepoStatus)
@@ -55,7 +54,6 @@ Class that contains the scraper implementation.
     * [.getRepoContributors(repo, org)](#module_SCRAPER..Scraper+getRepoContributors)
     * [.getRepoBranches(repo, org, default_branch)](#module_SCRAPER..Scraper+getRepoBranches)
     * [.getRepoCommits(repo, org)](#module_SCRAPER..Scraper+getRepoCommits)
-    * [.getRepoPRs(repo, org)](#module_SCRAPER..Scraper+getRepoPRs)
     * [.getRepoIssues(repo, org)](#module_SCRAPER..Scraper+getRepoIssues)
     * [.getReposList()](#module_SCRAPER..Scraper+getReposList)
     * [.getRepoStatus()](#module_SCRAPER..Scraper+getRepoStatus)
@@ -194,18 +192,6 @@ Get list of commits made in a repository.
 | repo | <code>string</code> | the name of the repository |
 | org | <code>string</code> | the name of the organization |
 
-<a name="module_SCRAPER..Scraper+getRepoPRs"></a>
-
-#### scraper.getRepoPRs(repo, org)
-Get the list of PRs from a repository.
-
-**Kind**: instance method of [<code>Scraper</code>](#module_SCRAPER..Scraper)  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| repo | <code>string</code> | the name of the repository |
-| org | <code>string</code> | the name of the organization |
-
 <a name="module_SCRAPER..Scraper+getRepoIssues"></a>
 
 #### scraper.getRepoIssues(repo, org)
@@ -250,7 +236,6 @@ Start the scraping process for all the repos within the repos list.
         * [.saveDevs(devs)](#module_DB..DB+saveDevs)
         * [.saveContributions(devs)](#module_DB..DB+saveContributions)
         * [.saveCommits(commits)](#module_DB..DB+saveCommits)
-        * [.savePRs(prs)](#module_DB..DB+savePRs)
         * [.saveIssues(issues)](#module_DB..DB+saveIssues)
 
 <a name="module_DB..DB"></a>
@@ -269,7 +254,6 @@ Class that contains the database wrapper implementation.
     * [.saveDevs(devs)](#module_DB..DB+saveDevs)
     * [.saveContributions(devs)](#module_DB..DB+saveContributions)
     * [.saveCommits(commits)](#module_DB..DB+saveCommits)
-    * [.savePRs(prs)](#module_DB..DB+savePRs)
     * [.saveIssues(issues)](#module_DB..DB+saveIssues)
 
 <a name="module_DB..DB+query"></a>
@@ -360,17 +344,6 @@ Save the list of commits.
 | Param | Type | Description |
 | --- | --- | --- |
 | commits | <code>object</code> | the list of commits |
-
-<a name="module_DB..DB+savePRs"></a>
-
-#### dB.savePRs(prs)
-Save the list of PRs.
-
-**Kind**: instance method of [<code>DB</code>](#module_DB..DB)  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| prs | <code>object</code> | the list of PRs |
 
 <a name="module_DB..DB+saveIssues"></a>
 

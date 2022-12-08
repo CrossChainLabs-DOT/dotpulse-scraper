@@ -64,29 +64,13 @@ CREATE TABLE IF NOT EXISTS devs_contributions
     UNIQUE (repo, organisation, dev_name)
 );
 
-CREATE TABLE IF NOT EXISTS prs
-(
-    id bigint NOT NULL,
-    pr_number int NOT NULL,
-    title text NOT NULL,
-    html_url text NOT NULL,
-    pr_state text NOT NULL,
-    created_at Timestamptz,
-    updated_at Timestamptz,
-    closed_at Timestamptz,
-    merged_at Timestamptz,
-    repo text NOT NULL,
-    organisation text NOT NULL,
-    dev_name text NOT NULL,
-    UNIQUE (id)
-);
-
 CREATE TABLE IF NOT EXISTS issues
 (
     id int NOT NULL,
     issue_number int NOT NULL,
     title text NOT NULL,
     html_url text NOT NULL,
+    is_pr boolean,
     issue_state text NOT NULL,
     created_at Timestamptz,
     updated_at Timestamptz,

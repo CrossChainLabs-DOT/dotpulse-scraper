@@ -3,9 +3,9 @@ AS
     with
         all_contributors as (
             with
-                prs as ( SELECT DISTINCT dev_name FROM prs),
+                contributors as ( SELECT DISTINCT dev_name FROM issues),
                 devs as ( SELECT DISTINCT dev_name FROM devs)
-                SELECT * FROM prs  UNION ALL
+                SELECT * FROM contributors  UNION ALL
                 SELECT * FROM devs),
 
             all_commits as (SELECT dev_name, commit_date as date FROM commits),
@@ -14,17 +14,17 @@ AS
             new_contributors_last_month as (SELECT COUNT(dev_name) as new_contributors_last_month FROM first_contribution WHERE date > NOW() - INTERVAL '30 days'),
             new_commits_last_week as (SELECT COUNT(commit_hash) as new_commits_last_week FROM commits WHERE commit_date > NOW() - INTERVAL '7 days'),
             new_commits_last_month as (SELECT COUNT(commit_hash) as new_commits_last_month FROM commits WHERE commit_date > NOW() - INTERVAL '30 days'),
-            new_prs_last_week as (SELECT COUNT(id) as new_prs_last_week FROM prs WHERE created_at > NOW() - INTERVAL '7 days'),
-            new_prs_last_month as (SELECT COUNT(id) as new_prs_last_month FROM prs WHERE created_at > NOW() - INTERVAL '30 days'),
+            new_prs_last_week as (SELECT COUNT(id) as new_prs_last_week FROM issues WHERE (created_at > NOW() - INTERVAL '7 days') AND (is_pr = true)),
+            new_prs_last_month as (SELECT COUNT(id) as new_prs_last_month FROM issues WHERE (created_at > NOW() - INTERVAL '30 days') AND (is_pr = true)),
             new_repos_last_week as (SELECT COUNT(repo) as new_repos_last_week FROM repos WHERE created_at > NOW() - INTERVAL '7 days'),
             new_repos_last_month as (SELECT COUNT(repo) as new_repos_last_month FROM repos WHERE created_at > NOW() - INTERVAL '30 days'),
 
             commits_data as ( SELECT sum(contributions) as commits FROM devs_contributions),
             repos_data as (SELECT count(repo) as repos FROM repos),
             contributors_data as (SELECT count(DISTINCT dev_name) as contributors FROM all_contributors),
-            prs_data as (SELECT count(pr_number) as prs FROM prs),
-            issues_open as (SELECT COUNT(id) as issues_open FROM issues WHERE issue_state = 'open'),
-            issues_closed as (SELECT COUNT(id) as issues_closed FROM issues WHERE issue_state = 'closed')
+            prs_data as (SELECT count(id) as prs FROM issues WHERE is_pr = true),
+            issues_open as (SELECT COUNT(id) as issues_open FROM issues WHERE (issue_state = 'open') AND (is_pr = false) ),
+            issues_closed as (SELECT COUNT(id) as issues_closed FROM issues WHERE (issue_state = 'closed') AND (is_pr = false))
 
     SELECT
         commits_data.commits,

@@ -233,49 +233,6 @@ class DB {
     await this.query(query, "saveCommits");
   }
 
-  /**
-   * Save the list of PRs.
-   * @param {object} prs - the list of PRs
-   */
-  async savePRs(prs) {
-    let query = "";
-
-    for (let i = 0; i < prs.length; i++) {
-      try {
-        let pr = prs[i];
-        let values = `'${pr.id}', \
-                        '${pr.pr_number}',\
-                        '${formatText(pr.title)}',\
-                        '${pr.html_url}',\
-                        '${pr.pr_state}',\
-                        ${formatNull(pr.created_at)},\
-                        ${formatNull(pr.updated_at)},\
-                        ${formatNull(pr.closed_at)},\
-                        ${formatNull(pr.merged_at)},\
-                        '${pr.repo}',\
-                        '${pr.organisation}',\
-                        '${pr.dev_name}'`;
-
-        query += `\
-                    UPDATE prs SET title='${formatText(pr.title)}',\
-                                pr_state='${pr.pr_state}', \
-                                updated_at=${formatNull(pr.updated_at)}, \
-                                closed_at=${formatNull(pr.closed_at)}, \
-                                merged_at=${formatNull(pr.merged_at)} \
-                        WHERE id='${pr.id}' AND repo='${
-          pr.repo
-        }' AND organisation='${pr.organisation}'; \
-                    INSERT INTO prs (id, pr_number, title, html_url, pr_state, created_at, updated_at, closed_at, merged_at, repo, organisation, dev_name) \
-                            SELECT ${values} WHERE NOT EXISTS (SELECT 1 FROM prs WHERE id='${
-          pr.id
-        }' AND repo='${pr.repo}' AND organisation='${pr.organisation}');`;
-      } catch (err) {
-        WARNING(`[savePRs] -> ${err}`);
-      }
-    }
-
-    await this.query(query, "savePRs");
-  }
 
   /**
    * Save the list of issues.
@@ -291,6 +248,7 @@ class DB {
                         '${issue.issue_number}',\
                         '${formatText(issue.title)}',\
                         '${issue.html_url}',\
+                        ${issue.is_pr},\
                         '${issue.issue_state}',\
                         ${formatNull(issue.created_at)},\
                         ${formatNull(issue.updated_at)},\
@@ -307,7 +265,7 @@ class DB {
                         WHERE id='${issue.id}' AND repo='${
           issue.repo
         }' AND organisation='${issue.organisation}'; \
-                    INSERT INTO issues (id, issue_number, title, html_url, issue_state, created_at, updated_at, closed_at, repo, organisation, dev_name) \
+                    INSERT INTO issues (id, issue_number, title, html_url, is_pr, issue_state, created_at, updated_at, closed_at, repo, organisation, dev_name) \
                             SELECT ${values} WHERE NOT EXISTS (SELECT 1 FROM issues WHERE id='${
           issue.id
         }' AND repo='${issue.repo}' AND organisation='${issue.organisation}');`;

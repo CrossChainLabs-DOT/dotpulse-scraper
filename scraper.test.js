@@ -87,25 +87,6 @@ axios.get.mockImplementation((url) => {
           },
         ],
       });
-    case "/repos/org/repo/pulls":
-      return Promise.resolve({
-        data: [
-          {
-            id: 1,
-            number: 1,
-            title: "pr_title",
-            html_url: "pr_url",
-            pr_state: "open",
-            created_at: "date1",
-            updated_at: "date2",
-            closed_at: null,
-            merged_at: null,
-            user: {
-              login: "dev1",
-            },
-          },
-        ],
-      });
     case "/repos/org/repo/issues":
       return Promise.resolve({
         data: [
@@ -114,6 +95,7 @@ axios.get.mockImplementation((url) => {
             number: 1,
             title: "issue_title1",
             html_url: "issue_url1",
+            is_pr: false,
             state: "open",
             created_at: "date1",
             updated_at: "date2",
@@ -127,6 +109,7 @@ axios.get.mockImplementation((url) => {
             number: 2,
             title: "issue_title2",
             html_url: "issue_url2",
+            is_pr: false,
             state: "closed",
             created_at: "date3",
             updated_at: "date4",
@@ -188,10 +171,6 @@ describe("Scraper", () => {
 
   test("getRepoCommits()", async () => {
     expect(await scraper.getRepoCommits("repo", "org")).toStrictEqual(2);
-  });
-
-  test("getRepoPRs()", async () => {
-    expect(await scraper.getRepoPRs("repo", "org")).toStrictEqual(1);
   });
 
   test("getRepoIssues()", async () => {
