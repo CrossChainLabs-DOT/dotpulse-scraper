@@ -23,6 +23,7 @@
         * [.getOrganizationRepos(org)](#module_SCRAPER..Scraper+getOrganizationRepos)
         * [.isBlacklisted(repo, org)](#module_SCRAPER..Scraper+isBlacklisted)
         * [.isValidRepo(repo, org)](#module_SCRAPER..Scraper+isValidRepo)
+        * [.getRepoParent(repo, org)](#module_SCRAPER..Scraper+getRepoParent)
         * [.getWhitelistedRepos()](#module_SCRAPER..Scraper+getWhitelistedRepos)
         * [.getRepoInfo()](#module_SCRAPER..Scraper+getRepoInfo)
         * [.getRepoContributors(repo, org)](#module_SCRAPER..Scraper+getRepoContributors)
@@ -49,6 +50,7 @@ Class that contains the scraper implementation.
     * [.getOrganizationRepos(org)](#module_SCRAPER..Scraper+getOrganizationRepos)
     * [.isBlacklisted(repo, org)](#module_SCRAPER..Scraper+isBlacklisted)
     * [.isValidRepo(repo, org)](#module_SCRAPER..Scraper+isValidRepo)
+    * [.getRepoParent(repo, org)](#module_SCRAPER..Scraper+getRepoParent)
     * [.getWhitelistedRepos()](#module_SCRAPER..Scraper+getWhitelistedRepos)
     * [.getRepoInfo()](#module_SCRAPER..Scraper+getRepoInfo)
     * [.getRepoContributors(repo, org)](#module_SCRAPER..Scraper+getRepoContributors)
@@ -135,6 +137,18 @@ Check if a repository should be skipped based on the provided configuration.
 
 #### scraper.isValidRepo(repo, org)
 Check if a repository exists.
+
+**Kind**: instance method of [<code>Scraper</code>](#module_SCRAPER..Scraper)  
+
+| Param | Type | Description |
+| --- | --- | --- |
+| repo | <code>string</code> | the name of the repository |
+| org | <code>string</code> | the name of the organization |
+
+<a name="module_SCRAPER..Scraper+getRepoParent"></a>
+
+#### scraper.getRepoParent(repo, org)
+Get the parent repository.
 
 **Kind**: instance method of [<code>Scraper</code>](#module_SCRAPER..Scraper)  
 

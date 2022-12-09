@@ -3,7 +3,7 @@
 const config = require("./config");
 const axios = require("axios");
 const cliProgress = require("cli-progress");
-const { compareAsc, subDays } = require("date-fns");
+const { subDays } = require("date-fns");
 const { INFO, ERROR, WARNING, STATUS } = require("./logs");
 const { DB } = require("./db");
 
@@ -11,11 +11,15 @@ let db = new DB();
 
 const PER_PAGE = 100;
 const SCRAPE_LIMIT = 1;
+const REPOS_LIST_UPDATE = 24*3600*1000;
 
 const blacklisted_organizations = config.scraper.blacklisted_organizations;
 const blacklisted_repos = config.scraper.blacklisted_repos;
 const whitelisted_organizations = config.scraper.whitelisted_organizations;
 const whitelisted_repos = config.scraper.whitelisted_repos;
+
+const pause = (timeout) =>
+  new Promise((res) => setTimeout(res, timeout * 1000));
 
 /** Class that contains the scraper implementation. */
 class Scraper {
@@ -33,6 +37,7 @@ class Scraper {
     this.search_remaining_requests = 0;
     this.reset_time = 0;
     this.stop = false;
+    this.lastGetWhitelistedRepos = 0;
 
     if (token_list?.length) {
       this.token = token_list[0];
@@ -62,6 +67,7 @@ class Scraper {
    */
   async get(url, params, verbose = false) {
     let response = undefined;
+    let should_pause = false;
 
     try {
       if (this.token) {
@@ -81,7 +87,15 @@ class Scraper {
         INFO(`get ${url} -> ${JSON.stringify(params)}`);
       }
     } catch (e) {
-      ERROR(`get ${url} -> ${JSON.stringify(params)} error: ${e}`);
+      if (e?.response?.status == 403) {
+        should_pause = true;
+      }
+      ERROR(`get ${url} -> ${JSON.stringify(params)} [${e?.response?.status}] error: ${e}`);
+    }
+
+    if (should_pause) {
+      INFO(`get ${url} -> ${JSON.stringify(params)} pause for 60 seconds`);
+      await pause(60);
     }
 
     return response;
@@ -247,6 +261,28 @@ class Scraper {
     return result;
   }
 
+    /**
+   * Get the parent repository.
+   * @param {string} repo - the name of the repository
+   * @param {string} org - the name of the organization
+   */
+     async getRepoParent(repo, org) {
+      let result = undefined;
+      let repo_full_name = org + "/" + repo;
+  
+      try {
+        const respGeneralInfo = await this.getWithRateLimitCheck(
+          this.api + "repos/" + repo_full_name
+        );
+
+        result = respGeneralInfo?.data?.parent?.full_name;
+      } catch (e) {
+        ERROR(`IsValidRepo: ${repo_full_name} -> ${e}`);
+      }
+  
+      return result;
+    }
+
   /**
    * Generate the list of repositories that should be scraped based on the provided configuration.
    */
@@ -254,6 +290,53 @@ class Scraper {
     let repos = [];
 
     try {
+      let ecosystem_repos = []
+      const ecosystem_repos_set = new Set();
+      const { promises: fsPromises} = require('fs');
+      const data = await fsPromises.readFile(config.scraper.ecosystem_repos, 'utf-8');
+      const ecosystem_repos_list = data.split(/\r?\n/);
+
+      for (const r of ecosystem_repos_list) {
+        if (!ecosystem_repos_set.has(r)) {
+          ecosystem_repos_set.add(r);
+
+          let split = r.split("/");
+          let org = split[0];
+          let repo = split[1];
+
+          ecosystem_repos.push({
+            repo: repo,
+            organisation: org,
+            repo_type: "whitelisted",
+            dependencies: "[]",
+          });
+        } 
+      }
+
+      let w3f_grants_archive_repos = await this.getOrganizationRepos(config.scraper.w3f_grants_archive);
+
+      for (const r of w3f_grants_archive_repos)
+      {
+        let parent = await this.getRepoParent(r, config.scraper.w3f_grants_archive);
+        if (parent && !ecosystem_repos_set.has(parent)) {
+          ecosystem_repos_set.add(parent);
+
+          let split = parent.split("/");
+          let org = split[0];
+          let repo = split[1];
+
+          ecosystem_repos.push({
+            repo: repo,
+            organisation: org,
+            repo_type: "whitelisted",
+            dependencies: "[]",
+          });
+        } 
+      }
+
+      await db.saveRepos(ecosystem_repos);
+
+
       for (let i = 0; i < whitelisted_organizations.length; i++) {
         let org = whitelisted_organizations[i];
         let org_repos = await this.getOrganizationRepos(org);
@@ -313,30 +396,6 @@ class Scraper {
       const respGeneralInfo = await this.getWithRateLimitCheck(
         this.api + "repos/" + repo_full_name
       );
-      const respLanguages = await this.getWithRateLimitCheck(
-        this.api + "repos/" + repo_full_name + "/languages"
-      );
-
-      let main_language = "";
-      let main_language_lines_max = 0;
-      let main_language_lines_sum = 0;
-
-      for (const [key, value] of Object.entries(respLanguages?.data)) {
-        if (main_language_lines_max < value) {
-          main_language = key;
-          main_language_lines_max = value;
-        }
-
-        main_language_lines_sum += value;
-      }
-
-      if (main_language && main_language_lines_sum) {
-        main_language += " ";
-        main_language += Math.round(
-          (main_language_lines_max / main_language_lines_sum) * 100
-        ).toString();
-        main_language += "%";
-      }
 
       result = {
         repo: repo,
@@ -348,10 +407,8 @@ class Scraper {
         updated_at: respGeneralInfo?.data?.updated_at,
         pushed_at: respGeneralInfo?.data?.pushed_at,
         owner_type: respGeneralInfo?.data?.owner?.type,
-        languages: JSON.stringify(respLanguages?.data),
         dependencies: JSON.stringify(dependencies),
         forks: respGeneralInfo?.data?.forks,
-        main_language: main_language,
       };
 
       await db.saveRepoInfo(result);
@@ -809,7 +866,10 @@ class Scraper {
   async run() {
     STATUS("scraping");
 
-    await this.getWhitelistedRepos();
+    if ((Date.now() - this.lastGetWhitelistedRepos) > REPOS_LIST_UPDATE) {
+      await this.getWhitelistedRepos();
+      this.lastGetWhitelistedRepos = Date.now();
+    }
 
     const repos = await this.getReposList();
 

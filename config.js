@@ -9,6 +9,8 @@ module.exports = {
       process.env.BLACKLIST_ORGANIZATIONS?.split(", ") || [],
     blacklisted_repos: process.env.BLACKLIST_REPOS?.split(", ") || [],
     recent_commits_days: process.env.RECENT_COMMITS_DAYS || 365,
+    w3f_grants_archive: process.env.W3F_GRANTS_ARCHIVE || "",
+    ecosystem_repos: process.env.ECOSYSTEM_REPOS || "",
   },
   database: {
     user: process.env.DB_USER || "",

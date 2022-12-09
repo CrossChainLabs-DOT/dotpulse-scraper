@@ -95,7 +95,6 @@ class DB {
                         '${repo.repo_type}',\
                         '${repo.stars}',\
                         '${repo.default_branch}',\
-                        '${repo.languages}',\
                         '${repo.dependencies}',\
                         '${repo.owner_type}',\
                         ${formatNull(repo.created_at)},\
@@ -104,10 +103,10 @@ class DB {
 
       await this.query(
         `
-                UPDATE repos SET stars='${repo.stars}', default_branch='${repo.default_branch}', languages='${repo.languages}', \
+                UPDATE repos SET stars='${repo.stars}', default_branch='${repo.default_branch}', \
                         dependencies='${repo.dependencies}', updated_at='${repo.updated_at}', pushed_at='${repo.pushed_at}'\
                     WHERE repo='${repo.repo}' AND organisation='${repo.organisation}'; \
-                INSERT INTO repos (repo, organisation, repo_type, stars, default_branch, languages, dependencies, owner_type, created_at, updated_at, pushed_at) \
+                INSERT INTO repos (repo, organisation, repo_type, stars, default_branch, dependencies, owner_type, created_at, updated_at, pushed_at) \
                     SELECT ${values} WHERE NOT EXISTS (SELECT 1 FROM repos WHERE repo='${repo.repo}' AND organisation='${repo.organisation}');`,
         "saveRepoInfo"
       );

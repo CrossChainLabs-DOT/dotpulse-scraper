@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS repos
     repo_type repo_type DEFAULT 'whitelisted' NOT NULL,
     stars int,
     default_branch text,
-    languages jsonb,
     dependencies jsonb,
     owner_type text,
     created_at Timestamptz,
