@@ -19,3 +19,12 @@ services:
     build: ../dotpulse-api/
     ports:
       - "3000:3000"
+  dotpulse-webapp:
+    depends_on: 
+      - dotpulse-api
+    restart: always
+    environment:
+      REACT_APP_API: dotpulse-api/
+    build: ../dotpulse-webapp/
+    ports:
+      - "8080:80"
