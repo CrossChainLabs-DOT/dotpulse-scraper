@@ -96,6 +96,7 @@ class Scraper {
     if (should_pause) {
       INFO(`get ${url} -> ${JSON.stringify(params)} pause for 60 seconds`);
       await pause(60);
+      this.remaining_requests = 0;
     }
 
     return response;
